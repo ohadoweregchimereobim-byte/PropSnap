@@ -148,7 +148,7 @@ export class ZooplaAdapter implements SiteAdapter {
         if (!result[key]) {
           const match = text.match(regex);
           if (match) {
-            result[key] = match[1];
+            result[key] = match[1]!;
           }
         }
       }
@@ -167,7 +167,7 @@ export class ZooplaAdapter implements SiteAdapter {
     for (const script of scripts) {
       const text = script.textContent ?? '';
       const match = text.match(/["']redirectPhone["']\s*:\s*["']([^"']+)["']/);
-      if (match) return match[1];
+      if (match) return match[1]!;
     }
 
     // Fallback: look for a tel: link near agent info

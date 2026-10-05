@@ -34,7 +34,7 @@ export async function saveListing(listing: PropertyListing): Promise<void> {
  * Get all saved listings from storage.
  */
 export async function getListings(): Promise<PropertyListing[]> {
-  const data = await chrome.storage.local.get(STORAGE_KEY);
+  const data = await chrome.storage.local.get<Record<string, PropertyListing[]>>(STORAGE_KEY);
   return data[STORAGE_KEY] ?? [];
 }
 
@@ -61,7 +61,7 @@ export async function clearListings(): Promise<void> {
  * Get extension settings.
  */
 export async function getSettings(): Promise<PropSnapSettings> {
-  const data = await chrome.storage.local.get(SETTINGS_KEY);
+  const data = await chrome.storage.local.get<Record<string, Partial<PropSnapSettings>>>(SETTINGS_KEY);
   return { ...DEFAULT_SETTINGS, ...(data[SETTINGS_KEY] ?? {}) };
 }
 

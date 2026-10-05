@@ -194,7 +194,7 @@ function toggleSettings() {
  * Load saved settings into the form.
  */
 async function loadSettings() {
-  const data = await chrome.storage.local.get('propsnap_settings');
+  const data = await chrome.storage.local.get<Record<string, any>>('propsnap_settings');
   const settings = data.propsnap_settings ?? {};
 
   epcTokenInput.value = settings.epcApiToken ?? '';

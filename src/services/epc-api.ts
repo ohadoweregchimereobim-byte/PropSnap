@@ -97,7 +97,7 @@ export function findBestMatch(
   listing: PropertyListing
 ): EpcResult | null {
   if (epcResults.length === 0) return null;
-  if (epcResults.length === 1) return epcResults[0];
+  if (epcResults.length === 1) return epcResults[0]!;
 
   // Score each result
   const scored = epcResults.map((result) => {
@@ -125,7 +125,8 @@ export function findBestMatch(
   scored.sort((a, b) => b.score - a.score);
 
   // Return best match, but only if it has a reasonable score
-  return scored[0].score >= 2 ? scored[0].result : null;
+  const best = scored[0]!;
+  return best.score >= 2 ? best.result : null;
 }
 
 /**
