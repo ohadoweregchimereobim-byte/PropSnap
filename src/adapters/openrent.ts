@@ -16,7 +16,8 @@ export class OpenRentAdapter implements SiteAdapter {
   site = 'openrent' as const;
 
   matchPatterns = [
-    /^https:\/\/www\.openrent\.com\/property-to-rent\/[^/]+\/\d+/,
+    /^https:\/\/www\.openrent\.(?:co\.uk|com)\/property-to-rent\/[^/]+\/[^/]+\/\d+/,
+    /^https:\/\/www\.openrent\.(?:co\.uk|com)\/property-to-rent\/[^/]+\/\d+/,
   ];
 
   canHandle(url: string): boolean {
@@ -75,7 +76,8 @@ export class OpenRentAdapter implements SiteAdapter {
       tenure: null,
       furnished: tableData['Furnishing'] ?? tableData['Furnished'] ?? null,
       deposit: this.parsePrice(tableData['Deposit']),
-      epcRating: tableData['EPC Rating'] ?? tableData['EPC'] ?? null,
+      epcRating:
+        tableData['EPC Rating'] ?? tableData['EPC'] ?? ('EPC Not Required' in tableData ? 'Not required' : null),
 
       capturedAt: new Date().toISOString(),
     };
@@ -85,7 +87,7 @@ export class OpenRentAdapter implements SiteAdapter {
 
   /**
    * Parse the page title to extract bedrooms, property type, and address.
-   * Format: "1 Bed Flat, Rochester Row, SW1P"
+   * Format: "London - 1 Bed Flat, Rochester Row, SW1P - To Rent Now for £2,800.00 p/m"
    */
   private parseTitle(title: string): {
     bedrooms: number | null;
@@ -93,8 +95,11 @@ export class OpenRentAdapter implements SiteAdapter {
     address: string;
     postcodeArea: string | null;
   } {
-    // Remove site name suffix
-    const cleaned = title.replace(/\s*[-|].*OpenRent.*$/i, '').trim();
+    // Remove the "- To Rent Now for £x p/m" / site name suffix and the leading "London - " city prefix
+    const cleaned = title
+      .replace(/\s+[-|]\s+(?:To Rent|.*OpenRent).*$/i, '')
+      .replace(/^[^,]*?\s+-\s+(?=\d+\s*Bed|Studio|Room)/i, '')
+      .trim();
 
     const bedroomMatch = cleaned.match(/^(\d+)\s*Bed/i);
     const bedrooms = bedroomMatch?.[1] ? parseInt(bedroomMatch[1], 10) : null;

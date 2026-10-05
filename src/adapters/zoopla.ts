@@ -122,7 +122,8 @@ export class ZooplaAdapter implements SiteAdapter {
     const scripts = document.querySelectorAll('script');
 
     for (const script of scripts) {
-      const text = script.textContent ?? '';
+      // Next.js flight data is a JS string, so its JSON arrives with escaped quotes
+      const text = (script.textContent ?? '').replace(/\\"/g, '"');
 
       // Look for tracking data patterns
       const patterns: Record<string, RegExp> = {
@@ -165,7 +166,7 @@ export class ZooplaAdapter implements SiteAdapter {
     const scripts = document.querySelectorAll('script');
 
     for (const script of scripts) {
-      const text = script.textContent ?? '';
+      const text = (script.textContent ?? '').replace(/\\"/g, '"');
       const match = text.match(/["']redirectPhone["']\s*:\s*["']([^"']+)["']/);
       if (match?.[1]) return match[1];
     }
