@@ -11,6 +11,7 @@ export default defineConfig({
       'https://www.rightmove.co.uk/*',
       'https://www.zoopla.co.uk/*',
       'https://www.openrent.com/*',
+      'https://www.openrent.co.uk/*',
       'https://epc.opendatacommunities.org/*',
     ],
   },

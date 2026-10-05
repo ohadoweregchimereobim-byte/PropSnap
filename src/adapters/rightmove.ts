@@ -3,11 +3,17 @@ import type { PropertyListing, SiteAdapter } from './types';
 /**
  * Rightmove adapter
  *
- * Data source: window.__PAGE_MODEL — a packed JSON array where element 0
- * is a schema map (keys → indices) and remaining elements are values.
+ * Data source: window.__PAGE_MODEL = { data: "<json string>", encoding: "on" }
  *
- * Risk: Packed format can change without warning. We version-check the
- * schema map structure and fall back to DOM scraping if it breaks.
+ * `data` is a JSON string holding a flat array in a devalue-style packed
+ * format: every object value and array element is an index into that same
+ * array, and element 0 is the root object. unpackPageModel() rebuilds the
+ * normal nested structure so the rest of the adapter can use plain property
+ * access (propertyData.prices.primaryPrice etc.).
+ *
+ * Risk: the packed format can change without warning. unpackPageModel()
+ * returns null when the structure is not what we expect, and extract()
+ * then throws a clear error instead of returning wrong data.
  */
 export class RightmoveAdapter implements SiteAdapter {
   site = 'rightmove' as const;
@@ -21,74 +27,53 @@ export class RightmoveAdapter implements SiteAdapter {
   }
 
   async extract(): Promise<PropertyListing> {
-    const pageModel = await this.getPageModel();
+    const rawModel = this.readModelFromScripts() ?? (await this.readModelFromPage());
+    const root = rawModel ? unpackPageModel(rawModel) : null;
+    const propertyData = root?.propertyData;
 
-    if (!pageModel) {
+    if (!propertyData) {
       throw new Error('PropSnap: Could not read Rightmove page data. The page format may have changed.');
     }
 
-    const listingId = this.getListingId();
-    const propertyData = this.resolve(pageModel, 'propertyData');
+    const prices = propertyData.prices ?? {};
+    const address = propertyData.address ?? {};
+    const location = propertyData.location ?? {};
+    const customer = propertyData.customer ?? {};
 
-    // Price
-    const prices = this.resolve(propertyData, 'prices');
-    const primaryPrice = this.resolve(prices, 'primaryPrice');
-    const priceValue = this.parsePrice(primaryPrice);
+    const displayAddress: string = address.displayAddress ?? '';
 
-    // Address
-    const address = this.resolve(propertyData, 'address');
-    const displayAddress = this.resolve(address, 'displayAddress') ?? '';
+    // UK listings carry outcode/incode; overseas listings leave them null.
+    const outcode: string | null = address.outcode || null;
+    const incode: string | null = address.incode || null;
 
-    // Location
-    const location = this.resolve(propertyData, 'location');
-    const latitude = this.resolve(location, 'latitude');
-    const longitude = this.resolve(location, 'longitude');
-
-    // Property type and bedrooms
-    const bedrooms = this.resolve(propertyData, 'bedrooms');
-    const propertySubType = this.resolve(propertyData, 'propertySubType');
-
-    // Agent info
-    const customerInfo = this.resolve(pageModel, 'customerInfo');
-    const agentName = this.resolve(customerInfo, 'companyName');
-    const agentPhone = this.resolve(customerInfo, 'contactTelephone');
-    const agentBranch = this.resolve(customerInfo, 'branchDisplayName');
-
-    // Listing type (sale vs rent)
-    const channel = this.resolve(propertyData, 'channel');
-    const listingType = channel === 'RENT' ? 'rent' : 'sale';
-
-    // Price qualifier
-    const priceQualifier = this.resolve(prices, 'priceQualifier');
-
-    // Rightmove only gives area-level postcode in the address string
-    const postcodePartial = this.extractPartialPostcode(displayAddress);
+    const latitude = location.latitude;
+    const longitude = location.longitude;
 
     return {
-      listingId,
+      listingId: String(propertyData.id ?? this.getListingId()),
       source: 'rightmove',
       url: window.location.href,
 
       displayAddress,
-      postcode: null,  // Rightmove doesn't give full postcode — needs EPC enrichment
-      postcodePartial,
+      postcode: outcode && incode ? `${outcode} ${incode}` : null,
+      postcodePartial: outcode ?? this.extractPartialPostcode(displayAddress),
       fullAddress: null,
 
-      price: priceValue,
-      priceQualifier: priceQualifier ?? null,
+      price: this.parsePrice(prices.primaryPrice),
+      priceQualifier: prices.displayPriceQualifier || null,
       currency: 'GBP',
-      listingType,
-      bedrooms: bedrooms != null ? Number(bedrooms) : null,
-      propertyType: propertySubType ?? null,
+      listingType: propertyData.transactionType === 'RENT' ? 'rent' : 'sale',
+      bedrooms: propertyData.bedrooms != null ? Number(propertyData.bedrooms) : null,
+      propertyType: propertyData.propertySubType ?? null,
 
-      agentName: agentName ?? null,
-      agentPhone: agentPhone ?? null,
-      agentBranch: agentBranch ?? null,
+      agentName: customer.companyName ?? null,
+      agentPhone: propertyData.contactInfo?.telephoneNumbers?.localNumber ?? null,
+      agentBranch: customer.branchDisplayName ?? null,
 
       latitude: latitude != null ? Number(latitude) : null,
       longitude: longitude != null ? Number(longitude) : null,
 
-      tenure: null,
+      tenure: propertyData.tenure?.tenureType ?? null,
       furnished: null,
       deposit: null,
       epcRating: null,
@@ -100,22 +85,48 @@ export class RightmoveAdapter implements SiteAdapter {
   // --- Private helpers ---
 
   /**
-   * Read the packed JSON from window.__PAGE_MODEL.
-   * Content scripts can't directly access page JS variables, so we
-   * inject a script element to read it and pass it back via a custom event.
+   * Read __PAGE_MODEL straight from the inline <script> that assigns it.
+   * Content scripts live in an isolated world and cannot see page globals,
+   * but they can read script text, and this avoids injecting inline code
+   * that a page CSP could block.
    */
-  private getPageModel(): Promise<any | null> {
+  private readModelFromScripts(): unknown | null {
+    const marker = 'window.__PAGE_MODEL = ';
+
+    for (const script of document.querySelectorAll('script')) {
+      const text = script.textContent ?? '';
+      const at = text.indexOf(marker);
+      if (at === -1) continue;
+
+      const json = sliceJsonObject(text, at + marker.length);
+      if (!json) continue;
+
+      try {
+        return JSON.parse(json);
+      } catch {
+        // Try the next script
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Fallback: inject a script into the page world to read window.__PAGE_MODEL
+   * and hand it back through a custom event.
+   */
+  private readModelFromPage(): Promise<unknown | null> {
     return new Promise((resolve) => {
-      const handler = (event: CustomEvent) => {
-        document.removeEventListener('__PROPSNAP_DATA__', handler as EventListener);
+      const handler = (event: Event) => {
+        document.removeEventListener('__PROPSNAP_DATA__', handler);
         try {
-          resolve(JSON.parse(event.detail));
+          resolve(JSON.parse((event as CustomEvent).detail));
         } catch {
           resolve(null);
         }
       };
 
-      document.addEventListener('__PROPSNAP_DATA__', handler as EventListener);
+      document.addEventListener('__PROPSNAP_DATA__', handler);
 
       const script = document.createElement('script');
       script.textContent = `
@@ -140,35 +151,12 @@ export class RightmoveAdapter implements SiteAdapter {
     });
   }
 
-  /**
-   * Resolve a key from the packed JSON structure.
-   * The schema map at index 0 maps field names to indices.
-   * Each value in the map points to an index in the data array.
-   */
-  private resolve(obj: any, key: string): any {
-    if (!obj || typeof obj !== 'object') return undefined;
-
-    // If it's a regular object (not packed), just return the key directly
-    if (!Array.isArray(obj)) {
-      return obj[key];
-    }
-
-    // Packed format: element 0 is schema map, rest are values
-    const schema = obj[0];
-    if (!schema || typeof schema !== 'object') return undefined;
-
-    const index = schema[key];
-    if (index === undefined) return undefined;
-
-    return obj[index];
-  }
-
   private getListingId(): string {
     const match = window.location.pathname.match(/\/properties\/(\d+)/);
     return match?.[1] ?? '';
   }
 
-  private parsePrice(priceStr: any): number | null {
+  private parsePrice(priceStr: unknown): number | null {
     if (priceStr == null) return null;
     const cleaned = String(priceStr).replace(/[^0-9.]/g, '');
     const num = parseFloat(cleaned);
@@ -180,4 +168,85 @@ export class RightmoveAdapter implements SiteAdapter {
     const match = address.match(/\b([A-Z]{1,2}\d[A-Z\d]?)\b/i);
     return match?.[1]?.toUpperCase() ?? null;
   }
+}
+
+/**
+ * Rebuild the nested structure from Rightmove's packed page model.
+ *
+ * Input is the value of window.__PAGE_MODEL ({ data: "<json>" }) or the
+ * already-parsed array. Returns the root object, or null if the input is
+ * not in the expected packed shape.
+ */
+export function unpackPageModel(model: unknown): any | null {
+  let packed: unknown = model;
+
+  if (packed && !Array.isArray(packed) && typeof packed === 'object' && 'data' in packed) {
+    packed = (packed as { data: unknown }).data;
+  }
+
+  if (typeof packed === 'string') {
+    try {
+      packed = JSON.parse(packed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(packed) || packed.length === 0) return null;
+
+  const cache = new Map<number, unknown>();
+
+  const resolve = (index: number): unknown => {
+    if (!Number.isInteger(index) || index < 0 || index >= packed.length) return undefined;
+    if (cache.has(index)) return cache.get(index);
+
+    const value = packed[index];
+
+    if (Array.isArray(value)) {
+      const out: unknown[] = [];
+      cache.set(index, out); // set first so cyclic references terminate
+      for (const item of value) out.push(resolve(item));
+      return out;
+    }
+
+    if (value && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      cache.set(index, out);
+      for (const [key, ref] of Object.entries(value)) out[key] = resolve(ref as number);
+      return out;
+    }
+
+    cache.set(index, value);
+    return value;
+  };
+
+  const root = resolve(0);
+  return root && typeof root === 'object' ? root : null;
+}
+
+/**
+ * Return the JSON object literal that starts at `start` in `text`,
+ * respecting strings and escapes so braces inside values are ignored.
+ */
+function sliceJsonObject(text: string, start: number): string | null {
+  if (text[start] !== '{') return null;
+
+  let depth = 0;
+  let inString = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return text.slice(start, i + 1);
+  }
+
+  return null;
 }

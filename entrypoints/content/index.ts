@@ -13,6 +13,7 @@ export default defineContentScript({
     'https://www.zoopla.co.uk/for-sale/details/*',
     'https://www.zoopla.co.uk/to-rent/details/*',
     'https://www.openrent.com/property-to-rent/*',
+    'https://www.openrent.co.uk/property-to-rent/*',
   ],
 
   async main() {
