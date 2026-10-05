@@ -1,0 +1,72 @@
+/**
+ * Normalised property listing data.
+ * Every site adapter maps its raw data into this shape.
+ */
+export interface PropertyListing {
+  // Identification
+  listingId: string;
+  source: 'rightmove' | 'zoopla' | 'openrent';
+  url: string;
+
+  // Address (partial from listing, enriched later via EPC)
+  displayAddress: string;
+  postcode: string | null;       // Full postcode if available from listing
+  postcodePartial: string | null; // Area-level postcode (always available)
+  fullAddress: string | null;     // Set after EPC enrichment
+
+  // Property details
+  price: number | null;
+  priceQualifier: string | null;  // "Guide price", "Offers over", etc.
+  currency: string;               // GBP
+  listingType: 'sale' | 'rent';
+  bedrooms: number | null;
+  propertyType: string | null;    // "Detached", "Flat", "Semi-detached", etc.
+
+  // Agent / landlord contact
+  agentName: string | null;
+  agentPhone: string | null;
+  agentBranch: string | null;
+
+  // Location
+  latitude: number | null;
+  longitude: number | null;
+
+  // Extra metadata (site-specific)
+  tenure: string | null;
+  furnished: string | null;
+  deposit: number | null;
+  epcRating: string | null;
+
+  // Timestamps
+  capturedAt: string;  // ISO 8601
+}
+
+/**
+ * Interface every site adapter must implement.
+ */
+export interface SiteAdapter {
+  /** Which site this adapter handles */
+  site: PropertyListing['source'];
+
+  /** URL patterns this adapter matches against */
+  matchPatterns: RegExp[];
+
+  /** Check if the current page URL is a property listing on this site */
+  canHandle(url: string): boolean;
+
+  /** Extract listing data from the current page DOM */
+  extract(): Promise<PropertyListing>;
+}
+
+/**
+ * Result from EPC API address enrichment
+ */
+export interface EpcResult {
+  address1: string;    // House number + street
+  address2: string;
+  address3: string;
+  postcode: string;
+  currentEnergyRating: string;
+  lodgementDate: string;
+  certificateHash: string;
+}

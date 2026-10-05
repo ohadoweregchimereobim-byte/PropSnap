@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropSnap</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <h1>PropSnap</h1>
+      <span class="version">v0.1</span>
+    </div>
+
+    <!-- Status area -->
+    <div id="status" class="status">
+      Checking page...
+    </div>
+
+    <!-- Capture button -->
+    <button id="captureBtn" class="btn btn-primary" disabled>
+      Capture Property
+    </button>
+
+    <!-- Result card (hidden by default) -->
+    <div id="resultCard" class="card" hidden>
+      <div class="card-row">
+        <span class="label">Address</span>
+        <span id="resultAddress" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Full Address</span>
+        <span id="resultFullAddress" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Postcode</span>
+        <span id="resultPostcode" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Price</span>
+        <span id="resultPrice" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Beds</span>
+        <span id="resultBeds" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Type</span>
+        <span id="resultType" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Agent</span>
+        <span id="resultAgent" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Phone</span>
+        <span id="resultPhone" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">EPC</span>
+        <span id="resultEpc" class="value"></span>
+      </div>
+      <div class="card-row">
+        <span class="label">Source</span>
+        <span id="resultSource" class="value"></span>
+      </div>
+    </div>
+
+    <!-- Saved listings count -->
+    <div class="footer">
+      <span id="listingCount">0 listings saved</span>
+      <div class="footer-actions">
+        <button id="exportBtn" class="btn btn-small">Export CSV</button>
+        <button id="settingsBtn" class="btn btn-small">Settings</button>
+      </div>
+    </div>
+
+    <!-- Settings panel (hidden by default) -->
+    <div id="settingsPanel" class="settings" hidden>
+      <h3>Settings</h3>
+      <div class="field">
+        <label for="epcToken">EPC API Token</label>
+        <input type="password" id="epcToken" placeholder="Your bearer token" />
+      </div>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="autoEnrich" checked />
+          Auto-enrich with EPC data
+        </label>
+      </div>
+      <button id="saveSettingsBtn" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
