@@ -8,7 +8,7 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "wxt prepare && tsc --noEmit"
   },
   "dependencies": {
     "wxt": "^0.21.4"

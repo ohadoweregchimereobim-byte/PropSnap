@@ -97,7 +97,7 @@ export class OpenRentAdapter implements SiteAdapter {
     const cleaned = title.replace(/\s*[-|].*OpenRent.*$/i, '').trim();
 
     const bedroomMatch = cleaned.match(/^(\d+)\s*Bed/i);
-    const bedrooms = bedroomMatch ? parseInt(bedroomMatch[1], 10) : null;
+    const bedrooms = bedroomMatch?.[1] ? parseInt(bedroomMatch[1], 10) : null;
 
     // Property type comes after "Bed " — e.g. "1 Bed Flat, ..."
     const typeMatch = cleaned.match(/\d+\s*Bed\s+(\w+)/i);
@@ -129,7 +129,7 @@ export class OpenRentAdapter implements SiteAdapter {
     } catch {
       // Fallback: regex the href
       const match = link.href.match(/postCode=([^&]+)/);
-      return match ? decodeURIComponent(match[1]).trim() : null;
+      return match?.[1] ? decodeURIComponent(match[1]).trim() : null;
     }
   }
 
@@ -144,8 +144,8 @@ export class OpenRentAdapter implements SiteAdapter {
     for (const row of rows) {
       const cells = row.querySelectorAll('td, th');
       if (cells.length >= 2) {
-        const key = (cells[0].textContent ?? '').trim();
-        const value = (cells[1].textContent ?? '').trim();
+        const key = (cells[0]?.textContent ?? '').trim();
+        const value = (cells[1]?.textContent ?? '').trim();
         if (key && value) {
           data[key] = value;
         }

@@ -195,10 +195,10 @@ function toggleSettings() {
  */
 async function loadSettings() {
   const data = await chrome.storage.local.get('propsnap_settings');
-  const settings = data.propsnap_settings ?? {};
+  const settings = (data.propsnap_settings ?? {}) as Record<string, unknown>;
 
-  epcTokenInput.value = settings.epcApiToken ?? '';
-  autoEnrichCheckbox.checked = settings.autoEnrich ?? true;
+  epcTokenInput.value = (settings.epcApiToken as string) ?? '';
+  autoEnrichCheckbox.checked = (settings.autoEnrich as boolean) ?? true;
 }
 
 /**

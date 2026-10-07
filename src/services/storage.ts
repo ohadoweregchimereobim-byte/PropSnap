@@ -35,7 +35,7 @@ export async function saveListing(listing: PropertyListing): Promise<void> {
  */
 export async function getListings(): Promise<PropertyListing[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
-  return data[STORAGE_KEY] ?? [];
+  return (data[STORAGE_KEY] as PropertyListing[] | undefined) ?? [];
 }
 
 /**
