@@ -114,8 +114,17 @@ async function handleCapture() {
     }
 
     // Display result
-    displayResult(enrichResponse.listing);
-    setStatus('Property captured!', 'success');
+    displayResult(enrichResponse.listing, enrichResponse.enrichmentStatus, enrichResponse.enrichmentDetail);
+
+    if (enrichResponse.enrichmentStatus === 'enriched') {
+      setStatus('Property captured with full address!', 'success');
+    } else if (enrichResponse.enrichmentStatus === 'api_error') {
+      setStatus(`Captured — EPC error: ${enrichResponse.enrichmentDetail}`, 'error');
+    } else if (enrichResponse.enrichmentStatus === 'no_match') {
+      setStatus('Captured — no EPC match found', 'error');
+    } else {
+      setStatus('Property captured!', 'success');
+    }
     await updateListingCount();
 
   } catch (error: any) {
@@ -129,9 +138,20 @@ async function handleCapture() {
 /**
  * Display a captured listing in the result card.
  */
-function displayResult(listing: any) {
+function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail?: string) {
   fields.address.textContent = listing.displayAddress || '—';
-  fields.fullAddress.textContent = listing.fullAddress || 'Not enriched';
+
+  if (listing.fullAddress) {
+    fields.fullAddress.textContent = listing.fullAddress;
+  } else if (enrichmentStatus === 'api_error') {
+    fields.fullAddress.textContent = `API error: ${enrichmentDetail ?? 'unknown'}`;
+  } else if (enrichmentStatus === 'no_match') {
+    fields.fullAddress.textContent = 'No EPC match found';
+  } else if (enrichmentStatus === 'no_postcode') {
+    fields.fullAddress.textContent = 'No postcode to search';
+  } else {
+    fields.fullAddress.textContent = 'Not enriched';
+  }
   fields.postcode.textContent = listing.postcode || listing.postcodePartial || '—';
   fields.beds.textContent = listing.bedrooms?.toString() || '—';
   fields.type.textContent = listing.propertyType || '—';

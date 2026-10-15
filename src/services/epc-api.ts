@@ -129,53 +129,87 @@ export function findBestMatch(
   return best && best.score >= 2 ? best.result : null;
 }
 
+export interface EnrichmentResult {
+  listing: PropertyListing;
+  enrichmentStatus: 'enriched' | 'no_match' | 'no_postcode' | 'api_error' | 'skipped';
+  enrichmentDetail?: string;
+}
+
 /**
  * Enrich a property listing with EPC data.
- * Returns the listing with fullAddress and epcRating filled in.
+ * Returns the listing with fullAddress and epcRating filled in,
+ * plus status info so the UI can tell the user what happened.
  */
 export async function enrichWithEpc(
   token: string,
   listing: PropertyListing
-): Promise<PropertyListing> {
+): Promise<EnrichmentResult> {
   // Only enrich if we don't already have the full address
-  if (listing.fullAddress) return listing;
+  if (listing.fullAddress) {
+    return { listing, enrichmentStatus: 'skipped', enrichmentDetail: 'Already has full address' };
+  }
+
+  // Need at least a postcode to search
+  const postcode = listing.postcode || listing.postcodePartial;
+  if (!postcode) {
+    return { listing, enrichmentStatus: 'no_postcode', enrichmentDetail: 'No postcode available to search EPC register' };
+  }
 
   try {
-    // Build search params
-    const params: EpcSearchParams = {};
+    // Build search params — search by postcode only first for broader results
+    const params: EpcSearchParams = { postcode };
 
-    if (listing.postcode) {
-      params.postcode = listing.postcode;
-    } else if (listing.postcodePartial) {
-      params.postcode = listing.postcodePartial;
-    }
-
-    if (listing.displayAddress) {
-      // Use a simplified version of the address for searching
-      const simplified = listing.displayAddress
-        .replace(/,/g, '')
-        .split(/\s+/)
-        .slice(0, 3)
-        .join(' ');
-      params.address = simplified;
-    }
+    console.log('PropSnap: EPC search params:', JSON.stringify(params));
 
     const results = await searchEpc(token, params);
+
+    console.log(`PropSnap: EPC returned ${results.length} results for postcode ${postcode}`);
+
+    if (results.length === 0) {
+      // Try without address filter if we had one
+      return {
+        listing,
+        enrichmentStatus: 'no_match',
+        enrichmentDetail: `No EPC records found for postcode ${postcode}`,
+      };
+    }
+
     const bestMatch = findBestMatch(results, listing);
 
     if (bestMatch) {
+      const fullAddress = [bestMatch.address1, bestMatch.address2, bestMatch.address3]
+        .filter(Boolean)
+        .join(', ');
+
+      console.log(`PropSnap: EPC match found: ${fullAddress}`);
+
       return {
-        ...listing,
-        fullAddress: [bestMatch.address1, bestMatch.address2, bestMatch.address3]
-          .filter(Boolean)
-          .join(', '),
-        postcode: bestMatch.postcode || listing.postcode,
-        epcRating: bestMatch.currentEnergyRating || listing.epcRating,
+        listing: {
+          ...listing,
+          fullAddress,
+          postcode: bestMatch.postcode || listing.postcode,
+          epcRating: bestMatch.currentEnergyRating || listing.epcRating,
+        },
+        enrichmentStatus: 'enriched',
       };
     }
-  } catch (error) {
-    console.warn('PropSnap: EPC enrichment failed:', error);
-  }
 
-  return listing;
+    // Had results but none matched well enough
+    const sampleAddresses = results.slice(0, 3).map(
+      (r) => [r.address1, r.address2].filter(Boolean).join(', ')
+    );
+    return {
+      listing,
+      enrichmentStatus: 'no_match',
+      enrichmentDetail: `Found ${results.length} EPC records for ${postcode} but none matched "${listing.displayAddress}". Sample results: ${sampleAddresses.join(' | ')}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('PropSnap: EPC enrichment failed:', message);
+    return {
+      listing,
+      enrichmentStatus: 'api_error',
+      enrichmentDetail: message,
+    };
+  }
 }

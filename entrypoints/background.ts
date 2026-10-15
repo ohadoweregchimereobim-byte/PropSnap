@@ -6,7 +6,7 @@
  * - Badge updates to show when user is on a listing page
  * - Storage coordination
  */
-import { enrichWithEpc } from '../src/services/epc-api';
+import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
 import { saveListing, getSettings, getListings } from '../src/services/storage';
 import type { PropertyListing } from '../src/adapters/types';
 
@@ -23,7 +23,12 @@ export default defineBackground(() => {
 
     if (message.type === 'CAPTURE_AND_ENRICH') {
       handleCaptureAndEnrich(message.listing)
-        .then((enriched) => sendResponse({ success: true, listing: enriched }))
+        .then((result) => sendResponse({
+          success: true,
+          listing: result.listing,
+          enrichmentStatus: result.enrichmentStatus,
+          enrichmentDetail: result.enrichmentDetail,
+        }))
         .catch((error) => sendResponse({ success: false, error: error.message }));
       return true; // Async response
     }
@@ -54,21 +59,24 @@ export default defineBackground(() => {
  */
 async function handleCaptureAndEnrich(
   listing: PropertyListing
-): Promise<PropertyListing> {
+): Promise<EnrichmentResult> {
   const settings = await getSettings();
-
-  let enriched = listing;
 
   // Run EPC enrichment if enabled and we have a token
   if (settings.autoEnrich && settings.epcApiToken) {
-    // Only call EPC if we need address enrichment
-    // Zoopla and OpenRent already give us the full postcode,
-    // but we might still want the full street address
-    enriched = await enrichWithEpc(settings.epcApiToken, listing);
+    console.log('PropSnap: Starting EPC enrichment...');
+    const result = await enrichWithEpc(settings.epcApiToken, listing);
+    console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');
+    await saveListing(result.listing);
+    return result;
   }
 
-  // Save to storage
-  await saveListing(enriched);
-
-  return enriched;
+  // No enrichment — save as-is
+  console.log('PropSnap: EPC enrichment skipped (disabled or no token)');
+  await saveListing(listing);
+  return {
+    listing,
+    enrichmentStatus: 'skipped',
+    enrichmentDetail: !settings.epcApiToken ? 'No EPC API token set' : 'Auto-enrich is disabled',
+  };
 }
