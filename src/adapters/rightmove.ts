@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { findEpcBandInText } from './epc-band';
 
 /**
  * Rightmove adapter
@@ -77,7 +78,11 @@ export class RightmoveAdapter implements SiteAdapter {
       tenure: propertyData.tenure?.tenureType ?? null,
       furnished: null,
       deposit: null,
-      epcRating: null,
+      // Rightmove has no rating field; agents often write it in key features or the description
+      epcRating: findEpcBandInText([
+        ...(Array.isArray(propertyData.keyFeatures) ? propertyData.keyFeatures : []),
+        propertyData.text?.description,
+      ]),
 
       capturedAt: new Date().toISOString(),
     };

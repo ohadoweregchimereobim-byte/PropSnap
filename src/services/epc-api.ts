@@ -307,7 +307,10 @@ export async function enrichWithEpc(
           ...listing,
           fullAddress,
           addressConfidence: match.confidence,
-          epcRating: result.currentEnergyRating || listing.epcRating,
+          // The listing's own rating is about this exact home. A best guess may be
+          // a neighbour, so only borrow the certificate's rating on an exact match.
+          epcRating: listing.epcRating
+            || (match.confidence === 'exact' ? result.currentEnergyRating || null : null),
         },
         enrichmentStatus: 'enriched',
         enrichmentDetail: describeMatch(match, postcode),

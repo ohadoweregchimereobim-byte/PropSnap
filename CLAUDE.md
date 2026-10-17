@@ -45,6 +45,7 @@ Each site exposes data differently:
 - Search results have no bedrooms/property type, so for the homes still close after the first pass (max 10) we fetch the full certificate (`GET /api/certificate?certificate_number=...`: `dwelling_type`, `habitable_room_count`, `total_floor_area`) and rank again. A 400/404/405 there turns the lookup off for the session
 - `addressConfidence`: `exact` when one home beats the rest by 2+ points with real evidence, else `best_guess`; `enrichmentDetail` says what it matched on
 - Listing floor area (`floorAreaSqm`) comes from Rightmove `sizings` and Zoopla JSON-LD `floorSize`
+- Listing EPC band (`epcRating`) comes from Zoopla's `epcRating` field, Rightmove "EPC Rating: X" text in key features/description, and OpenRent's table row (`src/adapters/epc-band.ts`); a home with the same band gets +2. The listing's own rating is never replaced, and the certificate's rating is only borrowed on an exact match
 
 ## Storage (`src/services/storage.ts`)
 
