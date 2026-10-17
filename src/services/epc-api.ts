@@ -3,38 +3,35 @@ import type { EpcResult, PropertyListing } from '../adapters/types';
 /**
  * EPC Register API client
  *
- * Endpoint: https://epc.opendatacommunities.org/api/v1/domestic/search
- * Auth: Bearer token (free registration at get-energy-performance-data.communities.gov.uk)
- * Cost: Free
+ * Endpoint: https://api.get-energy-performance-data.communities.gov.uk/api/domestic/search
+ * Auth: Bearer token (free, from get-energy-performance-data.communities.gov.uk)
+ * Docs: https://get-energy-performance-data.communities.gov.uk/api-technical-documentation
  *
- * Used primarily for Rightmove listings where the full postcode
- * isn't available from the listing page. Zoopla and OpenRent
- * already provide full postcodes.
+ * The old epc.opendatacommunities.org API was retired on 30 May 2026.
+ *
+ * We search by full postcode and pick the certificate whose address best
+ * matches the listing. The search results carry no bedrooms or property type,
+ * so when several homes score the same we still return one, but mark it as
+ * a best guess rather than an exact match.
  */
 
-const EPC_API_BASE = 'https://epc.opendatacommunities.org/api/v1/domestic/search';
+const EPC_API_BASE = 'https://api.get-energy-performance-data.communities.gov.uk/api/domestic/search';
 
 export interface EpcSearchParams {
-  postcode?: string;
-  address?: string;
-}
-
-interface EpcApiResponse {
-  rows: EpcRow[];
-  'column-names': string[];
+  postcode: string;
 }
 
 interface EpcRow {
-  ADDRESS1: string;
-  ADDRESS2: string;
-  ADDRESS3: string;
-  POSTCODE: string;
-  'CURRENT-ENERGY-RATING': string;
-  'LODGEMENT-DATE': string;
-  'BUILDING-REFERENCE-NUMBER': string;
-  'PROPERTY-TYPE': string;
-  'TOTAL-FLOOR-AREA': string;
-  [key: string]: string;
+  certificateNumber?: string;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  addressLine3?: string | null;
+  addressLine4?: string | null;
+  postcode?: string | null;
+  postTown?: string | null;
+  currentEnergyEfficiencyBand?: string | null;
+  registrationDate?: string | null;
+  uprn?: number | string | null;
 }
 
 /**
@@ -46,11 +43,7 @@ export async function searchEpc(
   token: string,
   params: EpcSearchParams
 ): Promise<EpcResult[]> {
-  const searchParams = new URLSearchParams();
-
-  if (params.postcode) searchParams.set('postcode', params.postcode);
-  if (params.address) searchParams.set('address', params.address);
-
+  const searchParams = new URLSearchParams({ postcode: params.postcode });
   const url = `${EPC_API_BASE}?${searchParams.toString()}`;
 
   const response = await fetch(url, {
@@ -60,73 +53,133 @@ export async function searchEpc(
     },
   });
 
+  // The API answers 404 when no certificates match the search
+  if (response.status === 404) return [];
+
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       throw new Error('EPC API: Invalid or expired bearer token');
     }
     if (response.status === 429) {
       throw new Error('EPC API: Rate limited — try again in a moment');
     }
+    if (response.status === 400) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`EPC API: Bad request${detail ? ` (${detail.slice(0, 200)})` : ''}`);
+    }
     throw new Error(`EPC API: HTTP ${response.status}`);
   }
 
-  const data: EpcApiResponse = await response.json();
+  const body = await response.json();
+  return extractRows(body).map(toEpcResult);
+}
 
-  return (data.rows ?? []).map((row) => ({
-    address1: row.ADDRESS1 ?? '',
-    address2: row.ADDRESS2 ?? '',
-    address3: row.ADDRESS3 ?? '',
-    postcode: row.POSTCODE ?? '',
-    currentEnergyRating: row['CURRENT-ENERGY-RATING'] ?? '',
-    lodgementDate: row['LODGEMENT-DATE'] ?? '',
-    certificateHash: row['BUILDING-REFERENCE-NUMBER'] ?? '',
-  }));
+/**
+ * Pull the certificate rows out of the response.
+ * The docs show `data` as the array, but tolerate it being wrapped in an object.
+ */
+function extractRows(body: any): EpcRow[] {
+  const data = body?.data;
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    const nested = Object.values(data).find(Array.isArray);
+    if (nested) return nested as EpcRow[];
+  }
+  return [];
+}
+
+function toEpcResult(row: EpcRow): EpcResult {
+  const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+  return {
+    addressLines: [row.addressLine1, row.addressLine2, row.addressLine3, row.addressLine4]
+      .map(clean)
+      .filter(Boolean),
+    postTown: clean(row.postTown),
+    postcode: clean(row.postcode).replace(/\+/g, ' '),
+    currentEnergyRating: clean(row.currentEnergyEfficiencyBand),
+    registrationDate: clean(row.registrationDate),
+    certificateNumber: clean(row.certificateNumber),
+    uprn: row.uprn != null && row.uprn !== '' ? String(row.uprn) : null,
+  };
+}
+
+/** "cf14 0sn", "CF14+0SN" and "CF140SN" all become "CF140SN" */
+export function normalisePostcode(postcode: string): string {
+  return postcode.toUpperCase().replace(/[\s+]/g, '');
+}
+
+/** True for a full UK postcode such as "CF14 0SN", false for an outcode like "CF14" */
+export function isFullPostcode(postcode: string | null | undefined): postcode is string {
+  return !!postcode && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(normalisePostcode(postcode));
+}
+
+/**
+ * A home can have several certificates over the years. Keep only the newest
+ * per home, so one house is never counted as two equally good candidates.
+ */
+export function latestPerHome(results: EpcResult[]): EpcResult[] {
+  const byHome = new Map<string, EpcResult>();
+
+  for (const result of results) {
+    const key = result.uprn
+      ?? `${result.addressLines.join(' ').toLowerCase()}|${normalisePostcode(result.postcode)}`;
+    const existing = byHome.get(key);
+    if (!existing || result.registrationDate > existing.registrationDate) {
+      byHome.set(key, result);
+    }
+  }
+
+  return [...byHome.values()];
+}
+
+export interface EpcMatch {
+  result: EpcResult;
+  confidence: 'exact' | 'best_guess';
+  /** How many homes shared the top score (1 for an exact match) */
+  tiedCount: number;
 }
 
 /**
  * Find the best EPC match for a property listing.
  *
- * Matching strategy:
- * 1. Search by postcode (full or partial + area)
- * 2. Filter by property type and bedrooms
- * 3. Score by address string similarity
- * 4. If coordinates available, prefer the closest match
+ * Scoring: +5 when the postcode matches, +1 for every word of the listing's
+ * display address (longer than 2 letters) found in the EPC address.
+ * A single clear winner that also shares address words with the listing is
+ * "exact"; a tie for first place, or a postcode-only match, is a "best_guess".
  */
 export function findBestMatch(
   epcResults: EpcResult[],
   listing: PropertyListing
-): EpcResult | null {
+): EpcMatch | null {
   if (epcResults.length === 0) return null;
-  if (epcResults.length === 1) return epcResults[0] ?? null;
 
-  // Score each result
+  const listingWords = listing.displayAddress.toLowerCase().split(/[\s,]+/).filter((w) => w.length > 2);
+  const listingPostcode = listing.postcode ? normalisePostcode(listing.postcode) : null;
+
   const scored = epcResults.map((result) => {
-    let score = 0;
+    const epcAddress = [...result.addressLines, result.postTown].join(' ').toLowerCase();
+    const wordMatches = listingWords.filter((word) => epcAddress.includes(word)).length;
 
-    // Address similarity — check if listing address words appear in EPC address
-    const listingWords = listing.displayAddress.toLowerCase().split(/[\s,]+/);
-    const epcAddress = `${result.address1} ${result.address2} ${result.address3}`.toLowerCase();
-
-    for (const word of listingWords) {
-      if (word.length > 2 && epcAddress.includes(word)) {
-        score += 1;
-      }
-    }
-
-    // Postcode match
-    if (listing.postcode && result.postcode === listing.postcode) {
+    let score = wordMatches;
+    if (listingPostcode && normalisePostcode(result.postcode) === listingPostcode) {
       score += 5;
     }
 
-    return { result, score };
+    return { result, score, wordMatches };
   });
 
-  // Sort by score descending
   scored.sort((a, b) => b.score - a.score);
 
-  // Return best match, but only if it has a reasonable score
-  const best = scored[0];
-  return best && best.score >= 2 ? best.result : null;
+  const best = scored[0]!;
+  if (best.score < 2) return null;
+
+  const tiedCount = scored.filter((s) => s.score === best.score).length;
+  return {
+    result: best.result,
+    confidence: tiedCount === 1 && best.wordMatches > 0 ? 'exact' : 'best_guess',
+    tiedCount,
+  };
 }
 
 export interface EnrichmentResult {
@@ -137,7 +190,7 @@ export interface EnrichmentResult {
 
 /**
  * Enrich a property listing with EPC data.
- * Returns the listing with fullAddress and epcRating filled in,
+ * Returns the listing with fullAddress, addressConfidence and epcRating filled in,
  * plus status info so the UI can tell the user what happened.
  */
 export async function enrichWithEpc(
@@ -149,24 +202,29 @@ export async function enrichWithEpc(
     return { listing, enrichmentStatus: 'skipped', enrichmentDetail: 'Already has full address' };
   }
 
-  // Need at least a postcode to search
-  const postcode = listing.postcode || listing.postcodePartial;
-  if (!postcode) {
-    return { listing, enrichmentStatus: 'no_postcode', enrichmentDetail: 'No postcode available to search EPC register' };
+  // A half postcode (e.g. "CF14") covers thousands of homes, so the
+  // match would be a guess at best. Only search with a full postcode.
+  if (!isFullPostcode(listing.postcode)) {
+    const partial = listing.postcodePartial ?? listing.postcode;
+    return {
+      listing,
+      enrichmentStatus: 'no_postcode',
+      enrichmentDetail: partial
+        ? `Full postcode not available (only ${partial})`
+        : 'No postcode available to search EPC register',
+    };
   }
 
+  const postcode = listing.postcode;
+
   try {
-    // Build search params — search by postcode only first for broader results
-    const params: EpcSearchParams = { postcode };
+    console.log('PropSnap: EPC search for postcode', postcode);
 
-    console.log('PropSnap: EPC search params:', JSON.stringify(params));
+    const results = latestPerHome(await searchEpc(token, { postcode }));
 
-    const results = await searchEpc(token, params);
-
-    console.log(`PropSnap: EPC returned ${results.length} results for postcode ${postcode}`);
+    console.log(`PropSnap: EPC returned ${results.length} homes for postcode ${postcode}`);
 
     if (results.length === 0) {
-      // Try without address filter if we had one
       return {
         listing,
         enrichmentStatus: 'no_match',
@@ -174,30 +232,31 @@ export async function enrichWithEpc(
       };
     }
 
-    const bestMatch = findBestMatch(results, listing);
+    const match = findBestMatch(results, listing);
 
-    if (bestMatch) {
-      const fullAddress = [bestMatch.address1, bestMatch.address2, bestMatch.address3]
-        .filter(Boolean)
-        .join(', ');
+    if (match) {
+      const { result } = match;
+      const fullAddress = [...result.addressLines, result.postTown].filter(Boolean).join(', ');
 
-      console.log(`PropSnap: EPC match found: ${fullAddress}`);
+      console.log(`PropSnap: EPC match (${match.confidence}): ${fullAddress}`);
 
       return {
         listing: {
           ...listing,
           fullAddress,
-          postcode: bestMatch.postcode || listing.postcode,
-          epcRating: bestMatch.currentEnergyRating || listing.epcRating,
+          addressConfidence: match.confidence,
+          epcRating: result.currentEnergyRating || listing.epcRating,
         },
         enrichmentStatus: 'enriched',
+        enrichmentDetail: match.confidence === 'exact' ? undefined
+          : match.tiedCount > 1
+            ? `${match.tiedCount} homes in ${postcode} match equally well, so this is a best guess`
+            : `Only the postcode matches, not the street, so this is a best guess`,
       };
     }
 
     // Had results but none matched well enough
-    const sampleAddresses = results.slice(0, 3).map(
-      (r) => [r.address1, r.address2].filter(Boolean).join(', ')
-    );
+    const sampleAddresses = results.slice(0, 3).map((r) => r.addressLines.join(', '));
     return {
       listing,
       enrichmentStatus: 'no_match',

@@ -61,6 +61,11 @@ body {
   color: #1e40af;
 }
 
+.status.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
