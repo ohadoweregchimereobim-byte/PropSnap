@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { epcBand } from './epc-band';
 
 /**
  * Zoopla adapter
@@ -79,7 +80,7 @@ export class ZooplaAdapter implements SiteAdapter {
       tenure: analytics.tenure ?? null,
       furnished: analytics.furnishing ?? null,
       deposit: null,
-      epcRating: null,
+      epcRating: epcBand(analytics.epc_rating),
 
       capturedAt: new Date().toISOString(),
     };
@@ -139,6 +140,7 @@ export class ZooplaAdapter implements SiteAdapter {
         branch_name: /["']branch_name["']\s*:\s*["']([^"']+)["']/,
         branch_id: /["']branch_id["']\s*:\s*["']?(\d+)["']?/,
         tenure: /["']tenure["']\s*:\s*["']([^"']+)["']/,
+        epc_rating: /["'](?:epcRating|epc_rating)["']\s*:\s*["']([A-Ga-g])["']/,
         furnishing: /["']furnishing["']\s*:\s*["']([^"']+)["']/,
         latitude: /["']latitude["']\s*:\s*["']?([\d.-]+)["']?/,
         longitude: /["']longitude["']\s*:\s*["']?([\d.-]+)["']?/,

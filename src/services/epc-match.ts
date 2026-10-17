@@ -1,4 +1,5 @@
 import type { EpcResult, PropertyListing } from '../adapters/types';
+import { epcBand } from '../adapters/epc-band';
 
 /**
  * Ranking EPC certificates against a listing.
@@ -13,6 +14,7 @@ import type { EpcResult, PropertyListing } from '../adapters/types';
  * - Property type: a flat vs house clash rules a home out; built form
  *   (detached, semi, terrace) adds a little.
  * - Habitable rooms: usually bedrooms + 1 or 2 (living room, dining room).
+ * - EPC band: when the listing shows one, homes with the same band (A-G) get a bonus.
  * - Street words and postcode, as before.
  */
 
@@ -86,6 +88,7 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
   const listingNumbers = extractNumbers(listing.displayAddress);
   const listingCategory = typeCategory(listing.propertyType);
   const listingForm = builtForm(listing.propertyType);
+  const listingBand = epcBand(listing.epcRating);
 
   return results.map((result) => {
     const reasons: string[] = [];
@@ -125,6 +128,12 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
     const epcForm = builtForm(result.builtForm ?? result.propertyType);
     if (listingForm && epcForm) {
       score += listingForm === epcForm ? 1 : -1;
+    }
+
+    // EPC band: the listing's rating comes from this home's own certificate
+    if (listingBand && epcBand(result.currentEnergyRating) === listingBand) {
+      score += 2;
+      reasons.push('EPC rating');
     }
 
     // Floor area
