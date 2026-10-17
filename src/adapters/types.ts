@@ -13,6 +13,7 @@ export interface PropertyListing {
   postcode: string | null;       // Full postcode if available from listing
   postcodePartial: string | null; // Area-level postcode (always available)
   fullAddress: string | null;     // Set after EPC enrichment
+  addressConfidence?: 'exact' | 'best_guess' | null; // How sure the EPC match is
 
   // Property details
   price: number | null;
@@ -62,11 +63,11 @@ export interface SiteAdapter {
  * Result from EPC API address enrichment
  */
 export interface EpcResult {
-  address1: string;    // House number + street
-  address2: string;
-  address3: string;
+  addressLines: string[]; // addressLine1-4, blank lines removed (line 1 = house number + street)
+  postTown: string;
   postcode: string;
   currentEnergyRating: string;
-  lodgementDate: string;
-  certificateHash: string;
+  registrationDate: string;
+  certificateNumber: string;
+  uprn: string | null;
 }

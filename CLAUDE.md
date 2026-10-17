@@ -34,11 +34,15 @@ Each site exposes data differently:
 
 ## EPC API (`src/services/epc-api.ts`)
 
-- Endpoint: `https://epc.opendatacommunities.org/api/v1/domestic/search`
+- Endpoint: `https://api.get-energy-performance-data.communities.gov.uk/api/domestic/search?postcode=...`
+  (the old `epc.opendatacommunities.org` API was retired on 30 May 2026)
+- Docs: https://get-energy-performance-data.communities.gov.uk/api-technical-documentation
 - Auth: Bearer token (user enters in settings)
-- Search by postcode, filter by address similarity scoring
-- Returns: ADDRESS1, ADDRESS2, ADDRESS3, POSTCODE, CURRENT_ENERGY_RATING
-- Key value: provides the **full street address** that listing sites redact
+- Response: `{ data: [ { addressLine1-4, postTown, postcode, currentEnergyEfficiencyBand, registrationDate, uprn, certificateNumber } ] }`; 404 means no certificates
+- Only searches with a **full** postcode; a half postcode (e.g. `CF14`) returns `no_postcode` instead of guessing
+- Keeps the newest certificate per home, then scores candidates by address words + postcode
+- `addressConfidence`: `exact` when one home clearly wins, `best_guess` when several tie for first place
+- Search results have no bedrooms/property type; the full certificate (`GET /api/certificate?certificate_number=...`) has `dwelling_type`, `habitable_room_count` and `total_floor_area` (not used yet)
 
 ## Storage (`src/services/storage.ts`)
 

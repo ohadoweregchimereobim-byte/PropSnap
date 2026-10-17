@@ -63,7 +63,7 @@ async function checkCurrentTab() {
   const supported = [
     /rightmove\.co\.uk\/properties\/\d+/,
     /zoopla\.co\.uk\/(for-sale|to-rent)\/details\/\d+/,
-    /openrent\.com\/property-to-rent\/[^/]+\/\d+/,
+    /openrent\.(co\.uk|com)\/property-to-rent\/.+\/\d+/,
   ];
 
   const isListing = supported.some((p) => p.test(tab.url!));
@@ -116,8 +116,12 @@ async function handleCapture() {
     // Display result
     displayResult(enrichResponse.listing, enrichResponse.enrichmentStatus, enrichResponse.enrichmentDetail);
 
-    if (enrichResponse.enrichmentStatus === 'enriched') {
+    if (enrichResponse.enrichmentStatus === 'enriched' && enrichResponse.listing.addressConfidence === 'best_guess') {
+      setStatus('Captured — full address is a best guess, please check it', 'warning');
+    } else if (enrichResponse.enrichmentStatus === 'enriched') {
       setStatus('Property captured with full address!', 'success');
+    } else if (enrichResponse.enrichmentStatus === 'no_postcode') {
+      setStatus(`Captured — ${enrichResponse.enrichmentDetail ?? 'no postcode to search'}`, 'warning');
     } else if (enrichResponse.enrichmentStatus === 'api_error') {
       setStatus(`Captured — EPC error: ${enrichResponse.enrichmentDetail}`, 'error');
     } else if (enrichResponse.enrichmentStatus === 'no_match') {
@@ -142,13 +146,16 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
   fields.address.textContent = listing.displayAddress || '—';
 
   if (listing.fullAddress) {
-    fields.fullAddress.textContent = listing.fullAddress;
+    const label = listing.addressConfidence === 'exact' ? ' (exact match)'
+      : listing.addressConfidence === 'best_guess' ? ' (best guess)'
+      : '';
+    fields.fullAddress.textContent = `${listing.fullAddress}${label}`;
   } else if (enrichmentStatus === 'api_error') {
     fields.fullAddress.textContent = `API error: ${enrichmentDetail ?? 'unknown'}`;
   } else if (enrichmentStatus === 'no_match') {
     fields.fullAddress.textContent = 'No EPC match found';
   } else if (enrichmentStatus === 'no_postcode') {
-    fields.fullAddress.textContent = 'No postcode to search';
+    fields.fullAddress.textContent = 'Full postcode not available';
   } else {
     fields.fullAddress.textContent = 'Not enriched';
   }
@@ -251,7 +258,7 @@ async function updateListingCount() {
 /**
  * Set the status message.
  */
-function setStatus(message: string, type: '' | 'success' | 'error' | 'ready') {
+function setStatus(message: string, type: '' | 'success' | 'error' | 'ready' | 'warning') {
   statusEl.textContent = message;
   statusEl.className = `status${type ? ` ${type}` : ''}`;
 }
