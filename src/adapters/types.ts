@@ -22,6 +22,7 @@ export interface PropertyListing {
   listingType: 'sale' | 'rent';
   bedrooms: number | null;
   propertyType: string | null;    // "Detached", "Flat", "Semi-detached", etc.
+  floorAreaSqm?: number | null;   // Internal floor area in square metres, when the listing shows it
 
   // Agent / landlord contact
   agentName: string | null;
@@ -70,4 +71,10 @@ export interface EpcResult {
   registrationDate: string;
   certificateNumber: string;
   uprn: string | null;
+
+  // Filled from the certificate itself when the search row does not carry them
+  propertyType?: string | null;   // "House", "Flat", "Bungalow", "Maisonette"
+  builtForm?: string | null;      // "Detached", "Semi-Detached", "Mid-Terrace", ...
+  floorAreaSqm?: number | null;
+  habitableRooms?: number | null;
 }

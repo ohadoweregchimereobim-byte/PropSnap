@@ -8,13 +8,15 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
-    "typecheck": "wxt prepare && tsc --noEmit"
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "wxt prepare && vitest run"
   },
   "dependencies": {
     "wxt": "^0.21.4"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.4",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.4"
   }
 }

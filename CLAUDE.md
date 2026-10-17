@@ -40,9 +40,11 @@ Each site exposes data differently:
 - Auth: Bearer token (user enters in settings)
 - Response: `{ data: [ { addressLine1-4, postTown, postcode, currentEnergyEfficiencyBand, registrationDate, uprn, certificateNumber } ] }`; 404 means no certificates
 - Only searches with a **full** postcode; a half postcode (e.g. `CF14`) returns `no_postcode` instead of guessing
-- Keeps the newest certificate per home, then scores candidates by address words + postcode
-- `addressConfidence`: `exact` when one home clearly wins, `best_guess` when several tie for first place
-- Search results have no bedrooms/property type; the full certificate (`GET /api/certificate?certificate_number=...`) has `dwelling_type`, `habitable_room_count` and `total_floor_area` (not used yet)
+- Keeps the newest certificate per home, then ranks candidates in `src/services/epc-match.ts` (pure, unit tested in `tests/`):
+  house/flat number (a clash rules a home out), floor area, flat vs house (a clash rules a home out), built form, habitable rooms vs bedrooms, address words, postcode
+- Search results have no bedrooms/property type, so for the homes still close after the first pass (max 10) we fetch the full certificate (`GET /api/certificate?certificate_number=...`: `dwelling_type`, `habitable_room_count`, `total_floor_area`) and rank again. A 400/404/405 there turns the lookup off for the session
+- `addressConfidence`: `exact` when one home beats the rest by 2+ points with real evidence, else `best_guess`; `enrichmentDetail` says what it matched on
+- Listing floor area (`floorAreaSqm`) comes from Rightmove `sizings` and Zoopla JSON-LD `floorSize`
 
 ## Storage (`src/services/storage.ts`)
 
