@@ -117,9 +117,9 @@ async function handleCapture() {
     displayResult(enrichResponse.listing, enrichResponse.enrichmentStatus, enrichResponse.enrichmentDetail);
 
     if (enrichResponse.enrichmentStatus === 'enriched' && enrichResponse.listing.addressConfidence === 'best_guess') {
-      setStatus('Captured — full address is a best guess, please check it', 'warning');
+      setStatus(`Captured — full address is a best guess, please check it. ${enrichResponse.enrichmentDetail ?? ''}`.trim(), 'warning');
     } else if (enrichResponse.enrichmentStatus === 'enriched') {
-      setStatus('Property captured with full address!', 'success');
+      setStatus(`Property captured with full address! ${enrichResponse.enrichmentDetail ?? ''}`.trim(), 'success');
     } else if (enrichResponse.enrichmentStatus === 'no_postcode') {
       setStatus(`Captured — ${enrichResponse.enrichmentDetail ?? 'no postcode to search'}`, 'warning');
     } else if (enrichResponse.enrichmentStatus === 'api_error') {

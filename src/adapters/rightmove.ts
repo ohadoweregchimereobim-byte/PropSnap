@@ -65,6 +65,7 @@ export class RightmoveAdapter implements SiteAdapter {
       listingType: propertyData.transactionType === 'RENT' ? 'rent' : 'sale',
       bedrooms: propertyData.bedrooms != null ? Number(propertyData.bedrooms) : null,
       propertyType: propertyData.propertySubType ?? null,
+      floorAreaSqm: floorAreaFromSizings(propertyData.sizings),
 
       agentName: customer.companyName ?? null,
       agentPhone: propertyData.contactInfo?.telephoneNumbers?.localNumber ?? null,
@@ -168,6 +169,25 @@ export class RightmoveAdapter implements SiteAdapter {
     const match = address.match(/\b([A-Z]{1,2}\d[A-Z\d]?)\b/i);
     return match?.[1]?.toUpperCase() ?? null;
   }
+}
+
+/**
+ * Rightmove gives sizes as [{ unit: "sqft", minimumSize, maximumSize }, { unit: "sqm", ... }].
+ * Prefer square metres (what EPC certificates use), else convert square feet.
+ */
+export function floorAreaFromSizings(sizings: unknown): number | null {
+  if (!Array.isArray(sizings)) return null;
+
+  const sizeOf = (unit: string) => {
+    const entry = sizings.find((s: any) => String(s?.unit ?? '').toLowerCase() === unit);
+    const size = Number(entry?.maximumSize ?? entry?.minimumSize);
+    return Number.isFinite(size) && size > 0 ? size : null;
+  };
+
+  const sqm = sizeOf('sqm');
+  if (sqm) return Math.round(sqm);
+  const sqft = sizeOf('sqft');
+  return sqft ? Math.round(sqft * 0.092903) : null;
 }
 
 /**

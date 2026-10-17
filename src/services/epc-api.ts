@@ -1,4 +1,6 @@
 import type { EpcResult, PropertyListing } from '../adapters/types';
+import { closeCalls, extractNumbers, findBestMatch, latestPerHome, normalisePostcode, scoreCandidates } from './epc-match';
+import type { EpcMatch } from './epc-match';
 
 /**
  * EPC Register API client
@@ -9,13 +11,22 @@ import type { EpcResult, PropertyListing } from '../adapters/types';
  *
  * The old epc.opendatacommunities.org API was retired on 30 May 2026.
  *
- * We search by full postcode and pick the certificate whose address best
- * matches the listing. The search results carry no bedrooms or property type,
- * so when several homes score the same we still return one, but mark it as
- * a best guess rather than an exact match.
+ * We search by full postcode and rank the certificates against the listing
+ * (see epc-match.ts). The search results carry little more than the address,
+ * so when several homes are close we look up each one's certificate for its
+ * property type, floor area and room count, then rank again.
  */
 
-const EPC_API_BASE = 'https://api.get-energy-performance-data.communities.gov.uk/api/domestic/search';
+const EPC_API_ROOT = 'https://api.get-energy-performance-data.communities.gov.uk';
+const EPC_API_BASE = `${EPC_API_ROOT}/api/domestic/search`;
+
+// Full certificate: dwelling_type, habitable_room_count, total_floor_area.
+// If it answers 400/404/405 we stop asking for details for the rest of the
+// session and rank on address alone.
+const EPC_CERTIFICATE_URL = `${EPC_API_ROOT}/api/certificate`;
+
+/** Most certificate lookups per capture, to stay clear of the rate limit */
+const MAX_DETAIL_LOOKUPS = 10;
 
 export interface EpcSearchParams {
   postcode: string;
@@ -101,12 +112,121 @@ function toEpcResult(row: EpcRow): EpcResult {
     registrationDate: clean(row.registrationDate),
     certificateNumber: clean(row.certificateNumber),
     uprn: row.uprn != null && row.uprn !== '' ? String(row.uprn) : null,
+    ...readDetails(row),
   };
 }
 
-/** "cf14 0sn", "CF14+0SN" and "CF140SN" all become "CF140SN" */
-export function normalisePostcode(postcode: string): string {
-  return postcode.toUpperCase().replace(/[\s+]/g, '');
+/**
+ * Read property type, built form, floor area and habitable rooms from a
+ * certificate, wherever they sit. Field names are matched loosely
+ * (dwelling_type, dwellingType and DWELLING-TYPE are all the same) so search
+ * rows, full certificates and older response shapes all work.
+ */
+export function readDetails(body: unknown): Pick<EpcResult, 'propertyType' | 'builtForm' | 'floorAreaSqm' | 'habitableRooms'> {
+  const wanted: Record<string, string> = {
+    dwellingtype: 'propertyType', // e.g. "Semi-detached house", "Mid-floor flat"
+    propertytype: 'propertyType',
+    builtform: 'builtForm',
+    totalfloorarea: 'floorAreaSqm',
+    habitableroomcount: 'habitableRooms',
+    numberhabitablerooms: 'habitableRooms',
+    habitablerooms: 'habitableRooms',
+  };
+  const found: Record<string, unknown> = {};
+
+  const walk = (value: unknown, depth: number) => {
+    if (!value || typeof value !== 'object' || depth > 4) return;
+    for (const [key, child] of Object.entries(value)) {
+      const target = wanted[key.toLowerCase().replace(/[^a-z]/g, '')];
+      if (target && found[target] == null && child != null && typeof child !== 'object') {
+        found[target] = child;
+      } else {
+        walk(child, depth + 1);
+      }
+    }
+  };
+  walk(body, 0);
+
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const num = (v: unknown) => {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const details: ReturnType<typeof readDetails> = {};
+  if (text(found.propertyType)) details.propertyType = text(found.propertyType);
+  if (text(found.builtForm)) details.builtForm = text(found.builtForm);
+  if (num(found.floorAreaSqm)) details.floorAreaSqm = num(found.floorAreaSqm);
+  if (num(found.habitableRooms)) details.habitableRooms = num(found.habitableRooms);
+  return details;
+}
+
+let certificateLookupUnavailable = false;
+
+/**
+ * Fetch one certificate's details. Returns null when the lookup fails, so a
+ * missing detail never stops the capture.
+ */
+export async function fetchCertificateDetails(
+  token: string,
+  certificateNumber: string
+): Promise<ReturnType<typeof readDetails> | null> {
+  if (certificateLookupUnavailable || !certificateNumber) return null;
+
+  try {
+    const url = `${EPC_CERTIFICATE_URL}?${new URLSearchParams({ certificate_number: certificateNumber })}`;
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if ([400, 404, 405].includes(response.status)) {
+      console.warn(`PropSnap: certificate lookup answered ${response.status}, ranking on address only`);
+      certificateLookupUnavailable = true;
+      return null;
+    }
+    if (!response.ok) return null;
+
+    return readDetails(await response.json());
+  } catch (error) {
+    console.warn('PropSnap: certificate lookup failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Fill in certificate details for the homes that are still close calls,
+ * so the second ranking pass can tell them apart.
+ */
+async function addDetailsToCloseCalls(
+  token: string,
+  results: EpcResult[],
+  listing: PropertyListing
+): Promise<EpcResult[]> {
+  const listingHasDetails = listing.bedrooms != null || !!listing.propertyType || !!listing.floorAreaSqm;
+  if (!listingHasDetails) return results;
+
+  const contenders = closeCalls(scoreCandidates(results, listing))
+    .map((c) => c.result)
+    .filter((r) => r.floorAreaSqm == null && r.propertyType == null)
+    .slice(0, MAX_DETAIL_LOOKUPS);
+  if (contenders.length < 2) return results;
+
+  const details = new Map<EpcResult, ReturnType<typeof readDetails>>();
+  // Two at a time keeps us well inside the rate limit
+  for (let i = 0; i < contenders.length; i += 2) {
+    const batch = contenders.slice(i, i + 2);
+    const fetched = await Promise.all(batch.map((r) => fetchCertificateDetails(token, r.certificateNumber)));
+    batch.forEach((r, j) => {
+      const d = fetched[j];
+      if (d) details.set(r, d);
+    });
+    if (certificateLookupUnavailable) break;
+  }
+
+  return results.map((r) => (details.has(r) ? { ...r, ...details.get(r) } : r));
 }
 
 /** True for a full UK postcode such as "CF14 0SN", false for an outcode like "CF14" */
@@ -114,72 +234,13 @@ export function isFullPostcode(postcode: string | null | undefined): postcode is
   return !!postcode && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(normalisePostcode(postcode));
 }
 
-/**
- * A home can have several certificates over the years. Keep only the newest
- * per home, so one house is never counted as two equally good candidates.
- */
-export function latestPerHome(results: EpcResult[]): EpcResult[] {
-  const byHome = new Map<string, EpcResult>();
-
-  for (const result of results) {
-    const key = result.uprn
-      ?? `${result.addressLines.join(' ').toLowerCase()}|${normalisePostcode(result.postcode)}`;
-    const existing = byHome.get(key);
-    if (!existing || result.registrationDate > existing.registrationDate) {
-      byHome.set(key, result);
-    }
+function describeMatch(match: EpcMatch, postcode: string): string {
+  const basis = match.reasons.length > 0 ? `matched on ${match.reasons.join(', ')}` : null;
+  if (match.confidence === 'exact') return basis ? `Exact: ${basis}` : 'Exact match';
+  if (match.tiedCount > 1) {
+    return `${match.tiedCount} homes in ${postcode} are close, so this is a best guess${basis ? ` (${basis})` : ''}`;
   }
-
-  return [...byHome.values()];
-}
-
-export interface EpcMatch {
-  result: EpcResult;
-  confidence: 'exact' | 'best_guess';
-  /** How many homes shared the top score (1 for an exact match) */
-  tiedCount: number;
-}
-
-/**
- * Find the best EPC match for a property listing.
- *
- * Scoring: +5 when the postcode matches, +1 for every word of the listing's
- * display address (longer than 2 letters) found in the EPC address.
- * A single clear winner that also shares address words with the listing is
- * "exact"; a tie for first place, or a postcode-only match, is a "best_guess".
- */
-export function findBestMatch(
-  epcResults: EpcResult[],
-  listing: PropertyListing
-): EpcMatch | null {
-  if (epcResults.length === 0) return null;
-
-  const listingWords = listing.displayAddress.toLowerCase().split(/[\s,]+/).filter((w) => w.length > 2);
-  const listingPostcode = listing.postcode ? normalisePostcode(listing.postcode) : null;
-
-  const scored = epcResults.map((result) => {
-    const epcAddress = [...result.addressLines, result.postTown].join(' ').toLowerCase();
-    const wordMatches = listingWords.filter((word) => epcAddress.includes(word)).length;
-
-    let score = wordMatches;
-    if (listingPostcode && normalisePostcode(result.postcode) === listingPostcode) {
-      score += 5;
-    }
-
-    return { result, score, wordMatches };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-
-  const best = scored[0]!;
-  if (best.score < 2) return null;
-
-  const tiedCount = scored.filter((s) => s.score === best.score).length;
-  return {
-    result: best.result,
-    confidence: tiedCount === 1 && best.wordMatches > 0 ? 'exact' : 'best_guess',
-    tiedCount,
-  };
+  return 'Only the postcode matches, not the street, so this is a best guess';
 }
 
 export interface EnrichmentResult {
@@ -220,7 +281,7 @@ export async function enrichWithEpc(
   try {
     console.log('PropSnap: EPC search for postcode', postcode);
 
-    const results = latestPerHome(await searchEpc(token, { postcode }));
+    let results = latestPerHome(await searchEpc(token, { postcode }));
 
     console.log(`PropSnap: EPC returned ${results.length} homes for postcode ${postcode}`);
 
@@ -232,6 +293,7 @@ export async function enrichWithEpc(
       };
     }
 
+    results = await addDetailsToCloseCalls(token, results, listing);
     const match = findBestMatch(results, listing);
 
     if (match) {
@@ -248,14 +310,19 @@ export async function enrichWithEpc(
           epcRating: result.currentEnergyRating || listing.epcRating,
         },
         enrichmentStatus: 'enriched',
-        enrichmentDetail: match.confidence === 'exact' ? undefined
-          : match.tiedCount > 1
-            ? `${match.tiedCount} homes in ${postcode} match equally well, so this is a best guess`
-            : `Only the postcode matches, not the street, so this is a best guess`,
+        enrichmentDetail: describeMatch(match, postcode),
       };
     }
 
     // Had results but none matched well enough
+    const numbers = extractNumbers(listing.displayAddress);
+    if (numbers.length > 0) {
+      return {
+        listing,
+        enrichmentStatus: 'no_match',
+        enrichmentDetail: `No EPC record in ${postcode} has the number ${numbers.join(' / ')} from "${listing.displayAddress}"`,
+      };
+    }
     const sampleAddresses = results.slice(0, 3).map((r) => r.addressLines.join(', '));
     return {
       listing,

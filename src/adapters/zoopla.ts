@@ -67,6 +67,7 @@ export class ZooplaAdapter implements SiteAdapter {
       listingType: isRent ? 'rent' : 'sale',
       bedrooms: analytics.num_beds != null ? Number(analytics.num_beds) : null,
       propertyType: analytics.property_type ?? null,
+      floorAreaSqm: floorAreaFromJsonLd(jsonLd),
 
       agentName,
       agentPhone,
@@ -190,4 +191,32 @@ export class ZooplaAdapter implements SiteAdapter {
     const num = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
     return isNaN(num) ? null : num;
   }
+}
+
+/**
+ * schema.org floorSize, found anywhere in the listing's JSON-LD:
+ * { "@type": "QuantitativeValue", "value": 1050, "unitCode": "FTK" }.
+ * FTK/sq ft is converted to square metres; MTK/sq m is used as is.
+ */
+export function floorAreaFromJsonLd(jsonLd: unknown): number | null {
+  const find = (value: any, depth: number): any => {
+    if (!value || typeof value !== 'object' || depth > 4) return null;
+    if (value.floorSize) return value.floorSize;
+    for (const child of Object.values(value)) {
+      const hit = find(child, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  const floorSize = find(jsonLd, 0);
+  if (!floorSize) return null;
+
+  const size = parseFloat(String(floorSize.value ?? floorSize).replace(/,/g, ''));
+  if (!Number.isFinite(size) || size <= 0) return null;
+
+  const unit = String(floorSize.unitCode ?? floorSize.unitText ?? '').toLowerCase();
+  // No unit given: homes over 250 are almost certainly in square feet
+  const isFeet = /ftk|ft|feet/.test(unit) || (!unit && size > 250);
+  return Math.round(isFeet ? size * 0.092903 : size);
 }
