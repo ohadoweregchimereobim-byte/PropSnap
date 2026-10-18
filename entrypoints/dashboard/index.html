@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropSnap Dashboard</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <header class="header">
+      <div class="title">
+        <h1>PropSnap</h1>
+        <span class="subtitle">Saved listings</span>
+      </div>
+      <div class="actions">
+        <button id="exportBtn" class="btn">Export CSV</button>
+        <button id="clearBtn" class="btn btn-danger">Clear all</button>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="Summary">
+      <div class="stat"><span id="statTotal" class="stat-value">0</span><span class="stat-label">Saved</span></div>
+      <div class="stat"><span id="statExact" class="stat-value">0</span><span class="stat-label">Exact match</span></div>
+      <div class="stat"><span id="statGuess" class="stat-value">0</span><span class="stat-label">Best guess</span></div>
+      <div class="stat"><span id="statNone" class="stat-value">0</span><span class="stat-label">No full address</span></div>
+    </section>
+
+    <section class="toolbar" aria-label="Filters">
+      <input id="search" type="search" placeholder="Search address, postcode or agent" aria-label="Search" />
+      <select id="sourceFilter" aria-label="Site">
+        <option value="all">All sites</option>
+        <option value="rightmove">Rightmove</option>
+        <option value="zoopla">Zoopla</option>
+        <option value="openrent">OpenRent</option>
+      </select>
+      <select id="matchFilter" aria-label="Match">
+        <option value="all">All matches</option>
+        <option value="exact">Exact match</option>
+        <option value="best_guess">Best guess</option>
+        <option value="none">No full address</option>
+      </select>
+      <span id="shownCount" class="shown"></span>
+    </section>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th><button data-sort="capturedAt">Captured</button></th>
+            <th><button data-sort="source">Site</button></th>
+            <th><button data-sort="address">Address</button></th>
+            <th><button data-sort="postcode">Postcode</button></th>
+            <th class="num"><button data-sort="price">Price</button></th>
+            <th class="num"><button data-sort="bedrooms">Beds</button></th>
+            <th><button data-sort="propertyType">Type</button></th>
+            <th><button data-sort="epcRating">EPC</button></th>
+            <th><button data-sort="agentName">Agent</button></th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <p id="empty" class="empty" hidden></p>
+    <p id="status" class="status" role="status"></p>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

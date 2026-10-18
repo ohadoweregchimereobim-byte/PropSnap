@@ -9,11 +9,14 @@
  * - Settings management
  */
 
+import { downloadCsv } from '../../src/services/csv-download';
+
 // DOM elements
 const statusEl = document.getElementById('status')!;
 const captureBtn = document.getElementById('captureBtn') as HTMLButtonElement;
 const resultCard = document.getElementById('resultCard')!;
 const exportBtn = document.getElementById('exportBtn')!;
+const dashboardBtn = document.getElementById('dashboardBtn')!;
 const settingsBtn = document.getElementById('settingsBtn')!;
 const settingsPanel = document.getElementById('settingsPanel')!;
 const saveSettingsBtn = document.getElementById('saveSettingsBtn')!;
@@ -45,6 +48,9 @@ async function init() {
 
   captureBtn.addEventListener('click', handleCapture);
   exportBtn.addEventListener('click', handleExport);
+  dashboardBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') });
+  });
   settingsBtn.addEventListener('click', toggleSettings);
   saveSettingsBtn.addEventListener('click', handleSaveSettings);
 }
@@ -204,14 +210,7 @@ async function handleExport() {
       return;
     }
 
-    // The byte order mark tells Excel the file is UTF-8, so letters like "ŵ" survive
-    const blob = new Blob(['\uFEFF', response.csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `propsnap-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(response.csv);
 
     setStatus('CSV exported!', 'success');
   } catch (error: any) {
