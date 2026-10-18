@@ -3,7 +3,7 @@ import type { EpcResult, PropertyListing } from '../src/adapters/types';
 import { extractNumbers, findBestMatch, latestPerHome, typeCategory } from '../src/services/epc-match';
 import { readDetails } from '../src/services/epc-api';
 import { floorAreaFromSizings } from '../src/adapters/rightmove';
-import { floorAreaFromJsonLd } from '../src/adapters/zoopla';
+import { floorAreaFromJsonLd, floorAreaFromPageData } from '../src/adapters/zoopla';
 
 // Made-up homes on one made-up street, all sharing a postcode
 function home(line1: string, extra: Partial<EpcResult> = {}): EpcResult {
@@ -146,5 +146,13 @@ describe('helpers', () => {
     expect(floorAreaFromJsonLd({ offers: { itemOffered: { floorSize: { value: 1076, unitCode: 'FTK' } } } })).toBe(100);
     expect(floorAreaFromJsonLd({ floorSize: { value: 80, unitCode: 'MTK' } })).toBe(80);
     expect(floorAreaFromJsonLd({ name: 'x' })).toBeNull();
+  });
+
+  it('reads floor area from Zoopla page data when JSON-LD has none', () => {
+    expect(floorAreaFromPageData('{"value":624,"unitsLabel":"sq. ft"}', null)).toBe(58);
+    expect(floorAreaFromPageData('{"value":58,"unitsLabel":"sq. m"}', null)).toBe(58);
+    expect(floorAreaFromPageData(null, '624')).toBe(58);
+    expect(floorAreaFromPageData(null, '1,076')).toBe(100);
+    expect(floorAreaFromPageData(null, '')).toBeNull();
   });
 });
