@@ -1,4 +1,4 @@
-import type { EpcResult, PropertyListing } from '../adapters/types';
+import type { AddressCandidate, EpcResult, PropertyListing } from '../adapters/types';
 import { closeCalls, extractNumbers, findBestMatch, latestPerHome, normalisePostcode, scoreCandidates } from './epc-match';
 import type { EpcMatch } from './epc-match';
 
@@ -27,6 +27,9 @@ const EPC_CERTIFICATE_URL = `${EPC_API_ROOT}/api/certificate`;
 
 /** Most certificate lookups per capture, to stay clear of the rate limit */
 const MAX_DETAIL_LOOKUPS = 10;
+
+/** Most close homes kept on a best guess for the user to choose from */
+const MAX_CANDIDATES = 15;
 
 export interface EpcSearchParams {
   postcode: string;
@@ -200,6 +203,8 @@ interface DetailPass {
   results: EpcResult[];
   /** Close calls that wanted a certificate lookup but did not get one */
   unchecked: number;
+  /** The close calls from the first pass, with any details filled in */
+  closeCalls: EpcResult[];
 }
 
 /**
@@ -212,12 +217,12 @@ async function addDetailsToCloseCalls(
   listing: PropertyListing
 ): Promise<DetailPass> {
   const listingHasDetails = listing.bedrooms != null || !!listing.propertyType || !!listing.floorAreaSqm;
-  if (!listingHasDetails) return { results, unchecked: 0 };
+  if (!listingHasDetails) return { results, unchecked: 0, closeCalls: [] };
 
   const needDetails = closeCalls(scoreCandidates(results, listing))
     .map((c) => c.result)
     .filter((r) => r.floorAreaSqm == null && r.propertyType == null);
-  if (needDetails.length < 2) return { results, unchecked: 0 };
+  if (needDetails.length < 2) return { results, unchecked: 0, closeCalls: [] };
 
   const contenders = needDetails.slice(0, MAX_DETAIL_LOOKUPS);
   const details = new Map<EpcResult, ReturnType<typeof readDetails>>();
@@ -232,8 +237,10 @@ async function addDetailsToCloseCalls(
     if (certificateLookupUnavailable) break;
   }
 
+  const withDetails = (r: EpcResult) => (details.has(r) ? { ...r, ...details.get(r) } : r);
   return {
-    results: results.map((r) => (details.has(r) ? { ...r, ...details.get(r) } : r)),
+    results: results.map(withDetails),
+    closeCalls: needDetails.map(withDetails),
     // When no home got details they are all still level, so nothing is unfair
     unchecked: details.size > 0 ? needDetails.length - details.size : 0,
   };
@@ -242,6 +249,21 @@ async function addDetailsToCloseCalls(
 /** True for a full UK postcode such as "CF14 0SN", false for an outcode like "CF14" */
 export function isFullPostcode(postcode: string | null | undefined): postcode is string {
   return !!postcode && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(normalisePostcode(postcode));
+}
+
+function fullAddressOf(result: EpcResult): string {
+  return [...result.addressLines, result.postTown].filter(Boolean).join(', ');
+}
+
+function toCandidate(result: EpcResult): AddressCandidate {
+  return {
+    fullAddress: fullAddressOf(result),
+    postcode: result.postcode,
+    certificateNumber: result.certificateNumber,
+    epcRating: result.currentEnergyRating || null,
+    floorAreaSqm: result.floorAreaSqm ?? null,
+    propertyType: result.propertyType ?? null,
+  };
 }
 
 function describeMatch(match: EpcMatch, postcode: string, unchecked: number): string {
@@ -313,12 +335,18 @@ export async function enrichWithEpc(
     // A checked home can pull ahead of homes we never checked. That is not a
     // fair win, so it stays a best guess.
     if (match?.confidence === 'exact' && detailPass.unchecked > 0) {
-      match = { ...match, confidence: 'best_guess' };
+      // The homes we could not tell apart are the ones to choose from
+      const best = match.result;
+      match = {
+        ...match,
+        confidence: 'best_guess',
+        others: detailPass.closeCalls.filter((r) => r.certificateNumber !== best.certificateNumber),
+      };
     }
 
     if (match) {
       const { result } = match;
-      const fullAddress = [...result.addressLines, result.postTown].filter(Boolean).join(', ');
+      const fullAddress = fullAddressOf(result);
 
       console.log(`PropSnap: EPC match (${match.confidence}): ${fullAddress}`);
 
@@ -327,6 +355,10 @@ export async function enrichWithEpc(
           ...listing,
           fullAddress,
           addressConfidence: match.confidence,
+          // On a best guess, keep the close homes so the user can pick the right one
+          addressCandidates: match.confidence === 'best_guess' && match.others.length > 0
+            ? [result, ...match.others].slice(0, MAX_CANDIDATES).map(toCandidate)
+            : null,
           // The listing's own rating is about this exact home. A best guess may be
           // a neighbour, so only borrow the certificate's rating on an exact match.
           epcRating: listing.epcRating

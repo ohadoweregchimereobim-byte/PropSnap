@@ -5,7 +5,7 @@ import type { PropertyListing } from '../adapters/types';
  * without a browser.
  */
 
-export type MatchFilter = 'all' | 'exact' | 'best_guess' | 'none';
+export type MatchFilter = 'all' | 'exact' | 'user_choice' | 'best_guess' | 'none';
 export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName';
 
 export interface ViewOptions {
@@ -24,10 +24,11 @@ export const DEFAULT_VIEW: ViewOptions = {
   sortDir: 'desc',
 };
 
-/** Which match group a listing falls in: exact, best guess, or no full address */
+/** Which match group a listing falls in: exact, picked by the user, best guess, or no full address */
 export function matchGroup(listing: PropertyListing): Exclude<MatchFilter, 'all'> {
   if (!listing.fullAddress) return 'none';
-  return listing.addressConfidence === 'exact' ? 'exact' : 'best_guess';
+  if (listing.addressConfidence === 'exact' || listing.addressConfidence === 'user_choice') return listing.addressConfidence;
+  return 'best_guess';
 }
 
 function searchText(l: PropertyListing): string {
@@ -77,7 +78,7 @@ export function applyView(listings: PropertyListing[], view: ViewOptions): Prope
 
 /** Counts for the summary bar */
 export function summarise(listings: PropertyListing[]): Record<Exclude<MatchFilter, 'all'> | 'total', number> {
-  const counts = { total: listings.length, exact: 0, best_guess: 0, none: 0 };
+  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0 };
   for (const l of listings) counts[matchGroup(l)]++;
   return counts;
 }

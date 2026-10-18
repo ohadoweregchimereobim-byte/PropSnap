@@ -13,7 +13,8 @@ export interface PropertyListing {
   postcode: string | null;       // Full postcode if available from listing
   postcodePartial: string | null; // Area-level postcode (always available)
   fullAddress: string | null;     // Set after EPC enrichment
-  addressConfidence?: 'exact' | 'best_guess' | null; // How sure the EPC match is
+  addressConfidence?: 'exact' | 'best_guess' | 'user_choice' | null; // How sure the EPC match is; user_choice = picked by the user
+  addressCandidates?: AddressCandidate[] | null;   // On a best guess, the close homes the user can choose from (best guess first)
   enrichmentDetail?: string | null; // What the EPC match was based on, e.g. "Exact: matched on house number"
 
   // Property details
@@ -43,6 +44,16 @@ export interface PropertyListing {
 
   // Timestamps
   capturedAt: string;  // ISO 8601
+}
+
+/** One of the close homes from the EPC register, kept so the user can pick the right one */
+export interface AddressCandidate {
+  fullAddress: string;
+  postcode: string;
+  certificateNumber: string;
+  epcRating: string | null;
+  floorAreaSqm?: number | null;
+  propertyType?: string | null;
 }
 
 /**

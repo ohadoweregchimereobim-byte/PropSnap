@@ -158,7 +158,11 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
   fields.address.textContent = listing.displayAddress || '—';
 
   if (listing.fullAddress) {
+    const choices = listing.addressCandidates?.length ?? 0;
     const label = listing.addressConfidence === 'exact' ? ' (exact match)'
+      : listing.addressConfidence === 'user_choice' ? ' (your choice)'
+      : listing.addressConfidence === 'best_guess' && choices > 1
+        ? ` (best guess: pick the right one of ${choices} close homes in the Dashboard)`
       : listing.addressConfidence === 'best_guess' ? ' (best guess)'
       : '';
     fields.fullAddress.textContent = `${listing.fullAddress}${label}`;
