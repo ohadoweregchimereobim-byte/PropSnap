@@ -7,7 +7,7 @@
  * - Storage coordination
  */
 import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
-import { saveListing, getSettings, getListings } from '../src/services/storage';
+import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
 import type { PropertyListing } from '../src/adapters/types';
 
 export default defineBackground(() => {
@@ -41,12 +41,9 @@ export default defineBackground(() => {
     }
 
     if (message.type === 'EXPORT_CSV') {
-      import('../src/services/storage').then(({ listingsToCsv }) => {
-        getListings().then((listings) => {
-          const csv = listingsToCsv(listings);
-          sendResponse({ success: true, csv });
-        });
-      });
+      getListings()
+        .then((listings) => sendResponse({ success: true, csv: listingsToCsv(listings) }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
       return true;
     }
   });
@@ -67,6 +64,8 @@ async function handleCaptureAndEnrich(
     console.log('PropSnap: Starting EPC enrichment...');
     const result = await enrichWithEpc(settings.epcApiToken, listing);
     console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');
+    // Keep the explanation with the listing so the CSV can show it later
+    result.listing = { ...result.listing, enrichmentDetail: result.enrichmentDetail ?? null };
     await saveListing(result.listing);
     return result;
   }

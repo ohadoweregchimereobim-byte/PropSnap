@@ -14,6 +14,7 @@ export interface PropertyListing {
   postcodePartial: string | null; // Area-level postcode (always available)
   fullAddress: string | null;     // Set after EPC enrichment
   addressConfidence?: 'exact' | 'best_guess' | null; // How sure the EPC match is
+  enrichmentDetail?: string | null; // What the EPC match was based on, e.g. "Exact: matched on house number"
 
   // Property details
   price: number | null;
