@@ -196,6 +196,12 @@ export async function fetchCertificateDetails(
   }
 }
 
+interface DetailPass {
+  results: EpcResult[];
+  /** Close calls that wanted a certificate lookup but did not get one */
+  unchecked: number;
+}
+
 /**
  * Fill in certificate details for the homes that are still close calls,
  * so the second ranking pass can tell them apart.
@@ -204,16 +210,16 @@ async function addDetailsToCloseCalls(
   token: string,
   results: EpcResult[],
   listing: PropertyListing
-): Promise<EpcResult[]> {
+): Promise<DetailPass> {
   const listingHasDetails = listing.bedrooms != null || !!listing.propertyType || !!listing.floorAreaSqm;
-  if (!listingHasDetails) return results;
+  if (!listingHasDetails) return { results, unchecked: 0 };
 
-  const contenders = closeCalls(scoreCandidates(results, listing))
+  const needDetails = closeCalls(scoreCandidates(results, listing))
     .map((c) => c.result)
-    .filter((r) => r.floorAreaSqm == null && r.propertyType == null)
-    .slice(0, MAX_DETAIL_LOOKUPS);
-  if (contenders.length < 2) return results;
+    .filter((r) => r.floorAreaSqm == null && r.propertyType == null);
+  if (needDetails.length < 2) return { results, unchecked: 0 };
 
+  const contenders = needDetails.slice(0, MAX_DETAIL_LOOKUPS);
   const details = new Map<EpcResult, ReturnType<typeof readDetails>>();
   // Two at a time keeps us well inside the rate limit
   for (let i = 0; i < contenders.length; i += 2) {
@@ -226,7 +232,11 @@ async function addDetailsToCloseCalls(
     if (certificateLookupUnavailable) break;
   }
 
-  return results.map((r) => (details.has(r) ? { ...r, ...details.get(r) } : r));
+  return {
+    results: results.map((r) => (details.has(r) ? { ...r, ...details.get(r) } : r)),
+    // When no home got details they are all still level, so nothing is unfair
+    unchecked: details.size > 0 ? needDetails.length - details.size : 0,
+  };
 }
 
 /** True for a full UK postcode such as "CF14 0SN", false for an outcode like "CF14" */
@@ -234,9 +244,12 @@ export function isFullPostcode(postcode: string | null | undefined): postcode is
   return !!postcode && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(normalisePostcode(postcode));
 }
 
-function describeMatch(match: EpcMatch, postcode: string): string {
+function describeMatch(match: EpcMatch, postcode: string, unchecked: number): string {
   const basis = match.reasons.length > 0 ? `matched on ${match.reasons.join(', ')}` : null;
   if (match.confidence === 'exact') return basis ? `Exact: ${basis}` : 'Exact match';
+  if (unchecked > 0) {
+    return `${unchecked} close homes in ${postcode} could not be checked in full, so this is a best guess${basis ? ` (${basis})` : ''}`;
+  }
   if (match.tiedCount > 1) {
     return `${match.tiedCount} homes in ${postcode} are close, so this is a best guess${basis ? ` (${basis})` : ''}`;
   }
@@ -293,8 +306,15 @@ export async function enrichWithEpc(
       };
     }
 
-    results = await addDetailsToCloseCalls(token, results, listing);
-    const match = findBestMatch(results, listing);
+    const detailPass = await addDetailsToCloseCalls(token, results, listing);
+    results = detailPass.results;
+    let match = findBestMatch(results, listing);
+
+    // A checked home can pull ahead of homes we never checked. That is not a
+    // fair win, so it stays a best guess.
+    if (match?.confidence === 'exact' && detailPass.unchecked > 0) {
+      match = { ...match, confidence: 'best_guess' };
+    }
 
     if (match) {
       const { result } = match;
@@ -313,7 +333,7 @@ export async function enrichWithEpc(
             || (match.confidence === 'exact' ? result.currentEnergyRating || null : null),
         },
         enrichmentStatus: 'enriched',
-        enrichmentDetail: describeMatch(match, postcode),
+        enrichmentDetail: describeMatch(match, postcode, detailPass.unchecked),
       };
     }
 

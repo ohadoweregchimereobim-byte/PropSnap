@@ -88,13 +88,19 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Display Address',
     'Full Address',
     'Address Confidence',
+    'Match Detail',
     'Postcode',
     'Price',
+    'Price Qualifier',
     'Listing Type',
     'Bedrooms',
     'Property Type',
     'Floor Area (sqm)',
+    'Tenure',
+    'Furnished',
+    'Deposit',
     'Agent/Landlord',
+    'Agent Branch',
     'Phone',
     'EPC Rating',
     'Latitude',
@@ -109,13 +115,19 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.displayAddress,
     l.fullAddress ?? '',
     l.addressConfidence ?? '',
+    l.enrichmentDetail ?? '',
     l.postcode ?? l.postcodePartial ?? '',
     l.price?.toString() ?? '',
+    l.priceQualifier ?? '',
     l.listingType,
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',
     l.floorAreaSqm?.toString() ?? '',
+    l.tenure ?? '',
+    l.furnished ?? '',
+    l.deposit?.toString() ?? '',
     l.agentName ?? '',
+    l.agentBranch ?? '',
     l.agentPhone ?? '',
     l.epcRating ?? '',
     l.latitude?.toString() ?? '',
@@ -123,8 +135,12 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.capturedAt,
   ]);
 
-  const escape = (val: string) => {
-    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+  const escape = (raw: string) => {
+    // Listing text comes from other websites. Excel runs a cell that starts
+    // with = + - or @ as a formula, so make such text plain. Numbers like a
+    // negative longitude stay as they are.
+    const val = /^[=+\-@\t\r]/.test(raw) && !/^-?\d+(\.\d+)?$/.test(raw) ? `'${raw}` : raw;
+    if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) {
       return `"${val.replace(/"/g, '""')}"`;
     }
     return val;

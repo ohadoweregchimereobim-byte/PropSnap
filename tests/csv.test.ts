@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import type { PropertyListing } from '../src/adapters/types';
+import { listingsToCsv } from '../src/services/storage';
+
+function listing(extra: Partial<PropertyListing> = {}): PropertyListing {
+  return {
+    listingId: '1',
+    source: 'openrent',
+    url: 'https://example.test',
+    displayAddress: 'Heol y Ŵyn Cardiff',
+    postcode: 'CF14 0SN',
+    postcodePartial: 'CF14',
+    fullAddress: null,
+    price: 1200,
+    priceQualifier: null,
+    currency: 'GBP',
+    listingType: 'rent',
+    bedrooms: 2,
+    propertyType: 'Flat',
+    agentName: null,
+    agentPhone: null,
+    agentBranch: null,
+    latitude: 51.5,
+    longitude: -3.18,
+    tenure: null,
+    furnished: 'Furnished',
+    deposit: 1385,
+    epcRating: null,
+    capturedAt: '2026-10-18T00:00:00Z',
+    ...extra,
+  };
+}
+
+/** Header name → cell, for one listing (no quoted commas in these tests) */
+function row(l: PropertyListing): Record<string, string> {
+  const [headers, cells] = listingsToCsv([l]).split('\n').map((line) => line.split(','));
+  return Object.fromEntries(headers!.map((h, i) => [h, cells![i]!]));
+}
+
+describe('listingsToCsv', () => {
+  it('turns text that Excel would run as a formula into plain text', () => {
+    const cells = row(listing({ agentName: '=HYPERLINK("http://bad.test")', agentBranch: '@SUM(A1)' }));
+    expect(cells['Agent/Landlord']).toBe(`"'=HYPERLINK(""http://bad.test"")"`);
+    expect(cells['Agent Branch']).toBe("'@SUM(A1)");
+  });
+
+  it('leaves negative numbers alone', () => {
+    expect(row(listing())['Longitude']).toBe('-3.18');
+  });
+
+  it('includes the extra listing columns and the match detail', () => {
+    const cells = row(listing({ priceQualifier: 'Offers over', tenure: 'Freehold', agentBranch: 'Cardiff Bay', enrichmentDetail: 'Exact: matched on house number' }));
+    expect(cells['Price Qualifier']).toBe('Offers over');
+    expect(cells['Tenure']).toBe('Freehold');
+    expect(cells['Furnished']).toBe('Furnished');
+    expect(cells['Deposit']).toBe('1385');
+    expect(cells['Agent Branch']).toBe('Cardiff Bay');
+    expect(cells['Match Detail']).toBe('Exact: matched on house number');
+  });
+});

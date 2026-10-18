@@ -92,10 +92,16 @@ async function handleCapture() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('No active tab');
 
-    // Ask content script to extract data
-    const extractResponse = await chrome.tabs.sendMessage(tab.id, {
-      type: 'EXTRACT_LISTING',
-    });
+    // Ask content script to extract data. A tab opened before PropSnap was
+    // installed or reloaded has no content script to answer.
+    const extractResponse = await chrome.tabs
+      .sendMessage(tab.id, { type: 'EXTRACT_LISTING' })
+      .catch((error: Error) => {
+        if (/receiving end does not exist|could not establish connection/i.test(error.message)) {
+          throw new Error('PropSnap cannot read this tab yet. Reload the page, then click Capture again.');
+        }
+        throw error;
+      });
 
     if (!extractResponse?.success) {
       throw new Error(extractResponse?.error ?? 'Extraction failed');
@@ -190,13 +196,16 @@ async function handleExport() {
   try {
     const response = await chrome.runtime.sendMessage({ type: 'EXPORT_CSV' });
 
-    if (!response?.success || !response.csv) {
+    if (!response?.success) {
+      throw new Error(response?.error ?? 'no answer from PropSnap');
+    }
+    if (!response.csv) {
       setStatus('No listings to export', 'error');
       return;
     }
 
-    // Create download
-    const blob = new Blob([response.csv], { type: 'text/csv' });
+    // The byte order mark tells Excel the file is UTF-8, so letters like "ŵ" survive
+    const blob = new Blob(['\uFEFF', response.csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
