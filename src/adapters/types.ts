@@ -23,6 +23,7 @@ export interface PropertyListing {
   bedrooms: number | null;
   propertyType: string | null;    // "Detached", "Flat", "Semi-detached", etc.
   floorAreaSqm?: number | null;   // Internal floor area in square metres, when the listing shows it
+  numberFromText?: string | null; // Flat/house number read from the listing text when the address hides it
 
   // Agent / landlord contact
   agentName: string | null;

@@ -1,5 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { findEpcBandInText } from './epc-band';
+import { findUnitNumberInText } from './unit-number';
 
 /**
  * Rightmove adapter
@@ -47,6 +48,9 @@ export class RightmoveAdapter implements SiteAdapter {
     const outcode: string | null = address.outcode || null;
     const incode: string | null = address.incode || null;
 
+    const keyFeatures: string[] = Array.isArray(propertyData.keyFeatures) ? propertyData.keyFeatures : [];
+    const listingText = [propertyData.text?.pageTitle, ...keyFeatures, propertyData.text?.description];
+
     const latitude = location.latitude;
     const longitude = location.longitude;
 
@@ -67,6 +71,7 @@ export class RightmoveAdapter implements SiteAdapter {
       bedrooms: propertyData.bedrooms != null ? Number(propertyData.bedrooms) : null,
       propertyType: propertyData.propertySubType ?? null,
       floorAreaSqm: floorAreaFromSizings(propertyData.sizings),
+      numberFromText: findUnitNumberInText(listingText, displayAddress),
 
       agentName: customer.companyName ?? null,
       agentPhone: propertyData.contactInfo?.telephoneNumbers?.localNumber ?? null,
@@ -79,10 +84,7 @@ export class RightmoveAdapter implements SiteAdapter {
       furnished: null,
       deposit: null,
       // Rightmove has no rating field; agents often write it in key features or the description
-      epcRating: findEpcBandInText([
-        ...(Array.isArray(propertyData.keyFeatures) ? propertyData.keyFeatures : []),
-        propertyData.text?.description,
-      ]),
+      epcRating: findEpcBandInText([...keyFeatures, propertyData.text?.description]),
 
       capturedAt: new Date().toISOString(),
     };

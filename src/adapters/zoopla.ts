@@ -1,5 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { epcBand } from './epc-band';
+import { findUnitNumberInText } from './unit-number';
 
 /**
  * Zoopla adapter
@@ -69,6 +70,7 @@ export class ZooplaAdapter implements SiteAdapter {
       bedrooms: analytics.num_beds != null ? Number(analytics.num_beds) : null,
       propertyType: analytics.property_type ?? null,
       floorAreaSqm: floorAreaFromJsonLd(jsonLd),
+      numberFromText: findUnitNumberInText([jsonLd?.name, jsonLd?.description, this.metaDescription()], displayAddress),
 
       agentName,
       agentPhone,
@@ -181,6 +183,10 @@ export class ZooplaAdapter implements SiteAdapter {
     }
 
     return null;
+  }
+
+  private metaDescription(): string | null {
+    return document.querySelector('meta[name="description"]')?.getAttribute('content') ?? null;
   }
 
   private getListingIdFromUrl(): string {
