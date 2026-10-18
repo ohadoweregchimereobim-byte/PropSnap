@@ -9,7 +9,8 @@ import { epcBand } from '../adapters/epc-band';
  *
  * Signals, strongest first:
  * - House / flat number: if the listing shows one, a certificate with a
- *   different number is ruled out.
+ *   different number is ruled out. If the address hides it but the listing
+ *   text names one ("Flat 12"), the certificate with that number gets a bonus.
  * - Floor area: within 10% of the listing is strong evidence, a big gap counts against.
  * - Property type: a flat vs house clash rules a home out; built form
  *   (detached, semi, terrace) adds a little.
@@ -57,6 +58,17 @@ export function extractNumbers(address: string): string[] {
     .filter((token) => /^\d+[a-z]?$/.test(token));
 }
 
+/**
+ * The number that tells homes apart in a certificate address:
+ * "Flat 12, 3 High Street" → "12", "12 Kings Court" → "12".
+ */
+export function unitNumber(addressLines: string[]): string | null {
+  const address = addressLines.join(' ');
+  const unit = address.match(/\b(?:flat|apartment|apt\.?|unit|maisonette)\s*(\d+[a-z]?)\b/i);
+  if (unit) return unit[1]!.toLowerCase();
+  return extractNumbers(address)[0] ?? null;
+}
+
 type TypeCategory = 'flat' | 'house';
 type BuiltForm = 'detached' | 'semi' | 'terrace';
 
@@ -86,6 +98,7 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
     .filter((w) => w.length > 2);
   const listingPostcode = listing.postcode ? normalisePostcode(listing.postcode) : null;
   const listingNumbers = extractNumbers(listing.displayAddress);
+  const listingTextNumber = listing.numberFromText?.toLowerCase() ?? null;
   const listingCategory = typeCategory(listing.propertyType);
   const listingForm = builtForm(listing.propertyType);
   const listingBand = epcBand(listing.epcRating);
@@ -113,6 +126,10 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
       } else {
         excluded = true;
       }
+    } else if (listingTextNumber && unitNumber(result.addressLines) === listingTextNumber) {
+      // Softer than the address: the text could mention another flat, so no one is ruled out
+      score += 4;
+      reasons.push('number in listing text');
     }
 
     // Property type: flat vs house is a hard clash, built form a soft bonus
