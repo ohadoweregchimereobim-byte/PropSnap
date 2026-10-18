@@ -11,6 +11,7 @@ Users browse Rightmove, Zoopla, or OpenRent listings. They click "Capture" in th
 - **Content scripts** (`entrypoints/content/`) — inject into listing pages, extract data using site-specific adapters
 - **Background service worker** (`entrypoints/background.ts`) — handles EPC API calls (cross-origin), storage, CSV export
 - **Popup** (`entrypoints/popup/`) — UI for capture button, result display, settings, export
+- **Dashboard** (`entrypoints/dashboard/`, built as `dashboard.html`) — full-page table of saved listings, opened from the popup's Dashboard button: search, site/match filters, sorting, open, delete, clear all, CSV export. Reads `chrome.storage.local` directly and redraws on `storage.onChanged`. Filter/sort logic is pure in `src/services/dashboard-view.ts` (tested)
 
 ## Site adapters (`src/adapters/`)
 
