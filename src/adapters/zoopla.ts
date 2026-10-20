@@ -1,5 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { epcBand } from './epc-band';
+import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
 
 /**
@@ -69,7 +70,8 @@ export class ZooplaAdapter implements SiteAdapter {
       listingType: isRent ? 'rent' : 'sale',
       bedrooms: analytics.num_beds != null ? Number(analytics.num_beds) : null,
       propertyType: analytics.property_type ?? null,
-      floorAreaSqm: floorAreaFromJsonLd(jsonLd),
+      floorAreaSqm: floorAreaFromJsonLd(jsonLd) ?? floorAreaFromPageData(analytics.floor_area, analytics.size_sq_feet),
+      floorAreaFromText: findFloorAreaInText([jsonLd?.description, this.metaDescription()]),
       numberFromText: findUnitNumberInText([jsonLd?.name, jsonLd?.description, this.metaDescription()], displayAddress),
 
       agentName,
@@ -148,6 +150,10 @@ export class ZooplaAdapter implements SiteAdapter {
         longitude: /["']longitude["']\s*:\s*["']?([\d.-]+)["']?/,
         has_epc: /["']has_epc["']\s*:\s*["']?(true|false)["']?/,
         has_floorplan: /["']has_floorplan["']\s*:\s*["']?(true|false)["']?/,
+        // The size the page shows ("624 sq. ft"). Not ingested.sizeSqft: that is
+        // Zoopla's estimate from neighbouring homes, not this home's own size.
+        floor_area: /["']floorArea["']\s*:\s*(\{[^{}]*\})/,
+        size_sq_feet: /["']sizeSqFeet["']\s*:\s*["']?(\d[\d,.]*)/,
       };
 
       for (const [key, regex] of Object.entries(patterns)) {
@@ -227,4 +233,28 @@ export function floorAreaFromJsonLd(jsonLd: unknown): number | null {
   // No unit given: homes over 250 are almost certainly in square feet
   const isFeet = /ftk|ft|feet/.test(unit) || (!unit && size > 250);
   return Math.round(isFeet ? size * 0.092903 : size);
+}
+
+/**
+ * Floor area from Zoopla's page data, for listings whose JSON-LD has no floorSize.
+ * `floorArea` is an object such as { "value": 624, "unitsLabel": "sq. ft" };
+ * `sizeSqFeet` is the analytics copy in square feet. Returns square metres.
+ */
+export function floorAreaFromPageData(floorAreaJson?: string | null, sizeSqFeet?: string | null): number | null {
+  if (floorAreaJson) {
+    try {
+      const area = JSON.parse(floorAreaJson);
+      const size = Number(area.value ?? area.size ?? area.minimum ?? area.maximum);
+      if (Number.isFinite(size) && size > 0) {
+        const unit = String(area.unitsLabel ?? area.units ?? area.unit ?? area.unitCode ?? '').toLowerCase();
+        const isFeet = /ft|feet|sqft|ftk/.test(unit) || (!/m/.test(unit) && size > 250);
+        return Math.round(isFeet ? size * 0.092903 : size);
+      }
+    } catch {
+      // Fall through to sizeSqFeet
+    }
+  }
+
+  const feet = parseFloat(String(sizeSqFeet ?? '').replace(/,/g, ''));
+  return Number.isFinite(feet) && feet > 0 ? Math.round(feet * 0.092903) : null;
 }

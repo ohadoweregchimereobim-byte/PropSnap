@@ -6,7 +6,8 @@
  * a new capture is saved, so it stays live while open.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { clearListings, deleteListing, getListings, listingsToCsv } from '../../src/services/storage';
+import { chooseAddress, clearListings, deleteListing, getListings, listingsToCsv } from '../../src/services/storage';
+import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import {
   applyView,
@@ -32,6 +33,7 @@ const sortButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('th 
 const stats = {
   total: document.getElementById('statTotal')!,
   exact: document.getElementById('statExact')!,
+  user_choice: document.getElementById('statChosen')!,
   best_guess: document.getElementById('statGuess')!,
   none: document.getElementById('statNone')!,
 };
@@ -42,7 +44,17 @@ const SITE_NAMES: Record<PropertyListing['source'], string> = {
   openrent: 'OpenRent',
 };
 
+const BADGES: Record<ReturnType<typeof matchGroup>, { text: string; style: string }> = {
+  exact: { text: 'Exact', style: 'exact' },
+  user_choice: { text: 'Your choice', style: 'chosen' },
+  best_guess: { text: 'Best guess', style: 'guess' },
+  none: { text: 'Not matched', style: 'none' },
+};
+
 const view: ViewOptions = { ...DEFAULT_VIEW };
+// Pickers the user opened stay open when the table redraws after a choice
+const openPickers = new Set<string>();
+const rowKey = (l: PropertyListing) => `${l.source}:${l.listingId}`;
 let listings: PropertyListing[] = [];
 
 init();
@@ -90,6 +102,7 @@ function render() {
   const counts = summarise(listings);
   stats.total.textContent = String(counts.total);
   stats.exact.textContent = String(counts.exact);
+  stats.user_choice.textContent = String(counts.user_choice);
   stats.best_guess.textContent = String(counts.best_guess);
   stats.none.textContent = String(counts.none);
 
@@ -153,8 +166,8 @@ function addressCell(l: PropertyListing): HTMLTableCellElement {
   main.textContent = l.fullAddress || l.displayAddress || '—';
 
   const badge = document.createElement('span');
-  badge.className = `badge badge-${group === 'exact' ? 'exact' : group === 'best_guess' ? 'guess' : 'none'}`;
-  badge.textContent = group === 'exact' ? 'Exact' : group === 'best_guess' ? 'Best guess' : 'Not matched';
+  badge.className = `badge badge-${BADGES[group].style}`;
+  badge.textContent = BADGES[group].text;
   badge.title = l.enrichmentDetail || (group === 'none' ? 'No full address from the EPC register' : 'Captured before match details were saved');
   main.append(badge);
   td.append(main);
@@ -167,7 +180,82 @@ function addressCell(l: PropertyListing): HTMLTableCellElement {
     td.append(listed);
   }
 
+  // On a best guess (or after a pick) let the user choose from the close homes
+  const candidates = l.addressCandidates ?? [];
+  if (candidates.length > 1 && (group === 'best_guess' || group === 'user_choice')) {
+    td.append(candidatePicker(l));
+  }
+
   return td;
+}
+
+function candidatePicker(l: PropertyListing): HTMLDetailsElement {
+  const candidates = l.addressCandidates ?? [];
+  const details = document.createElement('details');
+  details.className = 'picker';
+  details.open = openPickers.has(rowKey(l));
+  details.addEventListener('toggle', () => {
+    if (details.open) openPickers.add(rowKey(l));
+    else openPickers.delete(rowKey(l));
+  });
+
+  const summary = document.createElement('summary');
+  summary.textContent = l.addressConfidence === 'user_choice'
+    ? `Change the home (${candidates.length} close homes)`
+    : `Choose the right home (${candidates.length} close homes)`;
+  details.append(summary);
+
+  const hint = document.createElement('p');
+  hint.className = 'picker-hint';
+  hint.textContent = 'PropSnap cannot tell these homes apart. Compare the listing photos with Street View (Map), then pick the one that matches.';
+  details.append(hint);
+
+  const list = document.createElement('ul');
+  for (const c of candidates) {
+    const item = document.createElement('li');
+    const isCurrent = c.fullAddress === l.fullAddress;
+    if (isCurrent) item.className = 'current';
+
+    const text = document.createElement('span');
+    text.className = 'picker-address';
+    const facts = [c.epcRating ? `EPC ${c.epcRating}` : null, c.floorAreaSqm ? `${c.floorAreaSqm} m²` : null, c.propertyType]
+      .filter(Boolean)
+      .join(' · ');
+    text.textContent = facts ? `${c.fullAddress} (${facts})` : c.fullAddress;
+    item.append(text);
+
+    const map = document.createElement('a');
+    map.className = 'btn btn-row';
+    map.href = mapsLink(c.fullAddress, c.postcode);
+    map.target = '_blank';
+    map.rel = 'noopener noreferrer';
+    map.textContent = 'Map';
+    item.append(map);
+
+    if (isCurrent) {
+      const shown = document.createElement('span');
+      shown.className = 'picker-current';
+      shown.textContent = 'Shown now';
+      item.append(shown);
+    } else {
+      const pick = document.createElement('button');
+      pick.className = 'btn btn-row';
+      pick.textContent = 'This one';
+      pick.addEventListener('click', async () => {
+        try {
+          await chooseAddress(l.source, l.listingId, c.certificateNumber);
+          setStatus(`Saved your choice: ${c.fullAddress}`);
+        } catch (error: any) {
+          setStatus(`Could not save your choice: ${error.message}`);
+        }
+      });
+      item.append(pick);
+    }
+
+    list.append(item);
+  }
+  details.append(list);
+  return details;
 }
 
 function actionsCell(l: PropertyListing): HTMLTableCellElement {

@@ -248,6 +248,11 @@ th button[aria-sort='descending']::after {
   color: #92400e;
 }
 
+.badge-chosen {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 .badge-none {
   background: #f1f5f9;
   color: #64748b;
@@ -259,7 +264,8 @@ th button[aria-sort='descending']::after {
   white-space: nowrap;
 }
 
-.row-actions a {
+.row-actions a,
+.picker a {
   text-decoration: none;
 }
 
@@ -275,4 +281,48 @@ th button[aria-sort='descending']::after {
   margin-top: 12px;
   font-size: 13px;
   color: #64748b;
+}
+
+/* Close-home picker */
+.picker {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.picker summary {
+  color: #1d4ed8;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.picker-hint {
+  margin: 6px 0;
+  color: #64748b;
+}
+
+.picker ul {
+  list-style: none;
+}
+
+.picker li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.picker li.current .picker-address {
+  font-weight: 600;
+}
+
+.picker-address {
+  flex: 1;
+  min-width: 200px;
+}
+
+.picker-current {
+  color: #166534;
+  font-weight: 600;
 }

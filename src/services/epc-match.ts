@@ -38,6 +38,8 @@ export interface EpcMatch {
   tiedCount: number;
   /** What decided it, e.g. ["house number", "floor area"] */
   reasons: string[];
+  /** The other homes still in contention, best first (empty for a clear winner) */
+  others: EpcResult[];
 }
 
 /** "cf14 0sn", "CF14+0SN" and "CF140SN" all become "CF140SN" */
@@ -216,6 +218,7 @@ export function findBestMatch(epcResults: EpcResult[], listing: PropertyListing)
     confidence: contenders.length === 1 && hasEvidence ? 'exact' : 'best_guess',
     tiedCount: contenders.length,
     reasons: best.reasons,
+    others: contenders.filter((c) => c !== best).map((c) => c.result),
   };
 }
 

@@ -45,14 +45,16 @@ Each site exposes data differently:
   house/flat number (a clash rules a home out), floor area, flat vs house (a clash rules a home out), built form, habitable rooms vs bedrooms, address words, postcode
 - Search results have no bedrooms/property type, so for the homes still close after the first pass (max 10) we fetch the full certificate (`GET /api/certificate?certificate_number=...`: `dwelling_type`, `habitable_room_count`, `total_floor_area`) and rank again. A 400/404/405 there turns the lookup off for the session. If some close homes got details and others did not (more than 10, or a failed lookup), the result can't be `exact`
 - `addressConfidence`: `exact` when one home beats the rest by 2+ points with real evidence, else `best_guess`; `enrichmentDetail` says what it matched on
-- Listing floor area (`floorAreaSqm`) comes from Rightmove `sizings` and Zoopla JSON-LD `floorSize`
+- On a `best_guess` the close homes are saved as `addressCandidates` (best guess first, max 15). The dashboard lets the user pick one (`src/services/address-choice.ts`), which sets `addressConfidence: 'user_choice'`; a new capture of the same listing with the same postcode keeps that pick unless it finds an `exact` match
+- Listing floor area (`floorAreaSqm`) comes from Rightmove `sizings`, and on Zoopla from JSON-LD `floorSize`, else the page data's `floorArea` object or `sizeSqFeet`. Zoopla's `ingested.sizeSqft` is ignored: it is estimated from neighbouring homes
+- When the site gives no size, `src/adapters/floor-area-text.ts` reads one from the description (all 3 sites) into `floorAreaFromText`. It is strict: the clause must say it is the whole home (or be the size alone), any room/garden/plot word rules it out, and sizes that disagree give null. The background uses it only when the "Find the size in the listing text" setting is on (default on); `floorAreaSource` records `listing` or `text`, and the match detail says "floor area from the description"
 - Listing EPC band (`epcRating`) comes from Zoopla's `epcRating` field, Rightmove "EPC Rating: X" text in key features/description, and OpenRent's table row (`src/adapters/epc-band.ts`); a home with the same band gets +2. The listing's own rating is never replaced, and the certificate's rating is only borrowed on an exact match
 
 ## Storage (`src/services/storage.ts`)
 
 - Uses `chrome.storage.local`
 - Deduplicates by `source:listingId`
-- Settings: EPC API token, auto-enrich toggle
+- Settings: EPC API token, auto-enrich toggle, floor area from description toggle
 - CSV export of all saved listings, with the match detail saved per listing. Text cells starting with `= + - @` get a `'` so Excel won't run them; the popup adds a UTF-8 byte order mark
 
 ## Data flow

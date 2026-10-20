@@ -1,5 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { findEpcBandInText } from './epc-band';
+import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
 
 /**
@@ -71,6 +72,7 @@ export class RightmoveAdapter implements SiteAdapter {
       bedrooms: propertyData.bedrooms != null ? Number(propertyData.bedrooms) : null,
       propertyType: propertyData.propertySubType ?? null,
       floorAreaSqm: floorAreaFromSizings(propertyData.sizings),
+      floorAreaFromText: findFloorAreaInText(listingText),
       numberFromText: findUnitNumberInText(listingText, displayAddress),
 
       agentName: customer.companyName ?? null,

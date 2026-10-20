@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { findFloorAreaInText } from './floor-area-text';
 
 /**
  * OpenRent adapter
@@ -64,6 +65,9 @@ export class OpenRentAdapter implements SiteAdapter {
       listingType: 'rent',
       bedrooms: titleParts.bedrooms,
       propertyType: titleParts.propertyType,
+      // OpenRent has no size field, so the landlord's description is the only source.
+      // innerHTML, not textContent, so paragraph breaks still separate the sentences.
+      floorAreaFromText: findFloorAreaInText([document.querySelector('#descriptionText')?.innerHTML]),
 
       // OpenRent shows landlord name, not agent
       agentName: landlord.name,

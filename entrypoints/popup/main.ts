@@ -22,6 +22,7 @@ const settingsPanel = document.getElementById('settingsPanel')!;
 const saveSettingsBtn = document.getElementById('saveSettingsBtn')!;
 const epcTokenInput = document.getElementById('epcToken') as HTMLInputElement;
 const autoEnrichCheckbox = document.getElementById('autoEnrich') as HTMLInputElement;
+const floorAreaFromTextCheckbox = document.getElementById('floorAreaFromText') as HTMLInputElement;
 const listingCountEl = document.getElementById('listingCount')!;
 
 // Result fields
@@ -158,7 +159,11 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
   fields.address.textContent = listing.displayAddress || '—';
 
   if (listing.fullAddress) {
+    const choices = listing.addressCandidates?.length ?? 0;
     const label = listing.addressConfidence === 'exact' ? ' (exact match)'
+      : listing.addressConfidence === 'user_choice' ? ' (your choice)'
+      : listing.addressConfidence === 'best_guess' && choices > 1
+        ? ` (best guess: pick the right one of ${choices} close homes in the Dashboard)`
       : listing.addressConfidence === 'best_guess' ? ' (best guess)'
       : '';
     fields.fullAddress.textContent = `${listing.fullAddress}${label}`;
@@ -234,6 +239,7 @@ async function loadSettings() {
 
   epcTokenInput.value = (settings.epcApiToken as string) ?? '';
   autoEnrichCheckbox.checked = (settings.autoEnrich as boolean) ?? true;
+  floorAreaFromTextCheckbox.checked = (settings.floorAreaFromText as boolean) ?? true;
 }
 
 /**
@@ -243,6 +249,7 @@ async function handleSaveSettings() {
   const settings = {
     epcApiToken: epcTokenInput.value.trim(),
     autoEnrich: autoEnrichCheckbox.checked,
+    floorAreaFromText: floorAreaFromTextCheckbox.checked,
   };
 
   await chrome.storage.local.set({ propsnap_settings: settings });

@@ -1,4 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
+import { chooseCandidate, keepUserChoice } from './address-choice';
 
 const STORAGE_KEY = 'propsnap_listings';
 const SETTINGS_KEY = 'propsnap_settings';
@@ -6,28 +7,34 @@ const SETTINGS_KEY = 'propsnap_settings';
 export interface PropSnapSettings {
   epcApiToken: string;
   autoEnrich: boolean;  // Automatically run EPC lookup on capture
+  floorAreaFromText: boolean;  // Use a floor area read from the description when the site gives none
 }
 
 const DEFAULT_SETTINGS: PropSnapSettings = {
   epcApiToken: '',
   autoEnrich: true,
+  floorAreaFromText: true,
 };
 
 /**
  * Save a captured listing to Chrome extension storage.
+ * Returns the listing as saved (a home the user picked earlier is kept).
  */
-export async function saveListing(listing: PropertyListing): Promise<void> {
+export async function saveListing(listing: PropertyListing): Promise<PropertyListing> {
   const existing = await getListings();
 
   // Deduplicate by listingId + source
   const key = `${listing.source}:${listing.listingId}`;
+  const previous = existing.find((l) => `${l.source}:${l.listingId}` === key);
   const filtered = existing.filter(
     (l) => `${l.source}:${l.listingId}` !== key
   );
 
-  filtered.unshift(listing); // Most recent first
+  const saved = keepUserChoice(previous, listing);
+  filtered.unshift(saved); // Most recent first
 
   await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  return saved;
 }
 
 /**
@@ -36,6 +43,18 @@ export async function saveListing(listing: PropertyListing): Promise<void> {
 export async function getListings(): Promise<PropertyListing[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   return (data[STORAGE_KEY] as PropertyListing[] | undefined) ?? [];
+}
+
+/**
+ * Set a saved listing's full address to the close home the user picked.
+ */
+export async function chooseAddress(source: string, listingId: string, certificateNumber: string): Promise<void> {
+  const existing = await getListings();
+  const index = existing.findIndex((l) => l.source === source && l.listingId === listingId);
+  if (index === -1) throw new Error('Listing not found');
+
+  existing[index] = chooseCandidate(existing[index]!, certificateNumber);
+  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
 }
 
 /**
@@ -96,6 +115,7 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Bedrooms',
     'Property Type',
     'Floor Area (sqm)',
+    'Floor Area Source',
     'Tenure',
     'Furnished',
     'Deposit',
@@ -123,6 +143,7 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',
     l.floorAreaSqm?.toString() ?? '',
+    l.floorAreaSource === 'text' ? 'description' : l.floorAreaSource ?? '',
     l.tenure ?? '',
     l.furnished ?? '',
     l.deposit?.toString() ?? '',

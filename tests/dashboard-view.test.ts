@@ -64,7 +64,8 @@ describe('applyView', () => {
 
 describe('summarise and matchGroup', () => {
   it('counts each match group', () => {
-    expect(summarise(saved)).toEqual({ total: 3, exact: 1, best_guess: 1, none: 1 });
+    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1 });
+    expect(matchGroup(listing('x', { fullAddress: '1 Maple Road', addressConfidence: 'user_choice' }))).toBe('user_choice');
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road' }))).toBe('best_guess');
   });
 });

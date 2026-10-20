@@ -161,6 +161,10 @@ body {
   gap: 6px;
 }
 
+.footer-actions .btn {
+  white-space: nowrap;
+}
+
 /* Settings */
 .settings {
   margin-top: 12px;
@@ -191,6 +195,13 @@ body {
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   font-size: 13px;
+}
+
+.field .hint {
+  margin: 2px 0 0 22px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
 }
 
 .field input[type="checkbox"] {

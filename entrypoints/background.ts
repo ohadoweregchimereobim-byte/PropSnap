@@ -9,6 +9,7 @@
 import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
 import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
 import type { PropertyListing } from '../src/adapters/types';
+import { applyFloorAreaSetting } from '../src/adapters/floor-area-text';
 
 export default defineBackground(() => {
   // Update badge when on a listing page
@@ -55,9 +56,10 @@ export default defineBackground(() => {
  * Capture a listing, optionally enrich with EPC data, and save.
  */
 async function handleCaptureAndEnrich(
-  listing: PropertyListing
+  captured: PropertyListing
 ): Promise<EnrichmentResult> {
   const settings = await getSettings();
+  const listing = applyFloorAreaSetting(captured, settings.floorAreaFromText);
 
   // Run EPC enrichment if enabled and we have a token
   if (settings.autoEnrich && settings.epcApiToken) {
@@ -65,16 +67,15 @@ async function handleCaptureAndEnrich(
     const result = await enrichWithEpc(settings.epcApiToken, listing);
     console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');
     // Keep the explanation with the listing so the CSV can show it later
-    result.listing = { ...result.listing, enrichmentDetail: result.enrichmentDetail ?? null };
-    await saveListing(result.listing);
+    result.listing = await saveListing({ ...result.listing, enrichmentDetail: result.enrichmentDetail ?? null });
+    if (result.listing.addressConfidence === 'user_choice') result.enrichmentDetail = result.listing.enrichmentDetail ?? undefined;
     return result;
   }
 
   // No enrichment — save as-is
   console.log('PropSnap: EPC enrichment skipped (disabled or no token)');
-  await saveListing(listing);
   return {
-    listing,
+    listing: await saveListing(listing),
     enrichmentStatus: 'skipped',
     enrichmentDetail: !settings.epcApiToken ? 'No EPC API token set' : 'Auto-enrich is disabled',
   };

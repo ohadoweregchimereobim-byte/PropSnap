@@ -66,6 +66,14 @@ describe('certificate lookups for close calls', () => {
     const result = await enrichWithEpc('token', listing());
     expect(result.listing.fullAddress).toContain('Flat 1,');
     expect(result.listing.addressConfidence).toBe('exact');
+    expect(result.listing.addressCandidates).toBeNull();
+  });
+
+  it('says when the floor area came from the description', async () => {
+    stubBlock(4);
+    const result = await enrichWithEpc('token', listing({ floorAreaSource: 'text' }));
+    expect(result.listing.addressConfidence).toBe('exact');
+    expect(result.enrichmentDetail).toContain('floor area from the description');
   });
 
   it('stays a best guess when some close calls were never checked', async () => {
@@ -79,5 +87,8 @@ describe('certificate lookups for close calls', () => {
     expect(result.enrichmentDetail).toContain('2 close homes in CF11 0AS could not be checked');
     // A best guess never lends its rating to the listing
     expect(result.listing.epcRating).toBeNull();
+    // All 12 flats we could not tell apart are offered to choose from, best guess first
+    expect(result.listing.addressCandidates).toHaveLength(12);
+    expect(result.listing.addressCandidates?.[0]?.fullAddress).toContain('Flat 1,');
   });
 });

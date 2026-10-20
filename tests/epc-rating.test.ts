@@ -132,6 +132,7 @@ describe("enrichWithEpc keeps the listing's own rating", () => {
     const result = await enrichWithEpc('token', listing());
     expect(result.listing.addressConfidence).toBe('best_guess');
     expect(result.listing.epcRating).toBeNull();
+    expect(result.listing.addressCandidates?.map((c) => c.fullAddress)).toEqual(['1 Maple Road, CARDIFF', '3 Maple Road, CARDIFF']);
   });
 
   it('uses the certificate rating on an exact match when the listing has none', async () => {
