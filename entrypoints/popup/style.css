@@ -197,6 +197,13 @@ body {
   font-size: 13px;
 }
 
+.field .hint {
+  margin: 2px 0 0 22px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
 .field input[type="checkbox"] {
   margin-right: 6px;
 }

@@ -93,9 +93,14 @@
       </div>
       <div class="field">
         <label>
-          <input type="checkbox" id="floorAreaFromText" checked />
-          Read floor area from the description when the site gives none
+          <input type="checkbox" id="floorAreaFromText" checked aria-describedby="floorAreaFromTextHint" />
+          Find the size in the listing text
         </label>
+        <p id="floorAreaFromTextHint" class="hint">
+          Many listings show no size, but say "approx. 624 sq ft" in the description.
+          When on, PropSnap uses that size to help find the right home. It ignores
+          garden and room sizes. When off, it uses only a size the site shows.
+        </p>
       </div>
       <button id="saveSettingsBtn" class="btn btn-primary">Save</button>
     </div>
