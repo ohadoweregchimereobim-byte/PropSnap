@@ -161,6 +161,10 @@ body {
   gap: 6px;
 }
 
+.footer-actions .btn {
+  white-space: nowrap;
+}
+
 /* Settings */
 .settings {
   margin-top: 12px;

@@ -1,5 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { epcBand } from './epc-band';
+import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
 
 /**
@@ -70,6 +71,7 @@ export class ZooplaAdapter implements SiteAdapter {
       bedrooms: analytics.num_beds != null ? Number(analytics.num_beds) : null,
       propertyType: analytics.property_type ?? null,
       floorAreaSqm: floorAreaFromJsonLd(jsonLd) ?? floorAreaFromPageData(analytics.floor_area, analytics.size_sq_feet),
+      floorAreaFromText: findFloorAreaInText([jsonLd?.description, this.metaDescription()]),
       numberFromText: findUnitNumberInText([jsonLd?.name, jsonLd?.description, this.metaDescription()], displayAddress),
 
       agentName,

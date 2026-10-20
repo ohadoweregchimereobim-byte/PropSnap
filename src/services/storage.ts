@@ -7,11 +7,13 @@ const SETTINGS_KEY = 'propsnap_settings';
 export interface PropSnapSettings {
   epcApiToken: string;
   autoEnrich: boolean;  // Automatically run EPC lookup on capture
+  floorAreaFromText: boolean;  // Use a floor area read from the description when the site gives none
 }
 
 const DEFAULT_SETTINGS: PropSnapSettings = {
   epcApiToken: '',
   autoEnrich: true,
+  floorAreaFromText: true,
 };
 
 /**
@@ -113,6 +115,7 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Bedrooms',
     'Property Type',
     'Floor Area (sqm)',
+    'Floor Area Source',
     'Tenure',
     'Furnished',
     'Deposit',
@@ -140,6 +143,7 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',
     l.floorAreaSqm?.toString() ?? '',
+    l.floorAreaSource === 'text' ? 'description' : l.floorAreaSource ?? '',
     l.tenure ?? '',
     l.furnished ?? '',
     l.deposit?.toString() ?? '',

@@ -9,6 +9,7 @@
 import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
 import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
 import type { PropertyListing } from '../src/adapters/types';
+import { applyFloorAreaSetting } from '../src/adapters/floor-area-text';
 
 export default defineBackground(() => {
   // Update badge when on a listing page
@@ -55,9 +56,10 @@ export default defineBackground(() => {
  * Capture a listing, optionally enrich with EPC data, and save.
  */
 async function handleCaptureAndEnrich(
-  listing: PropertyListing
+  captured: PropertyListing
 ): Promise<EnrichmentResult> {
   const settings = await getSettings();
+  const listing = applyFloorAreaSetting(captured, settings.floorAreaFromText);
 
   // Run EPC enrichment if enabled and we have a token
   if (settings.autoEnrich && settings.epcApiToken) {

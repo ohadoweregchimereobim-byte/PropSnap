@@ -69,6 +69,13 @@ describe('certificate lookups for close calls', () => {
     expect(result.listing.addressCandidates).toBeNull();
   });
 
+  it('says when the floor area came from the description', async () => {
+    stubBlock(4);
+    const result = await enrichWithEpc('token', listing({ floorAreaSource: 'text' }));
+    expect(result.listing.addressConfidence).toBe('exact');
+    expect(result.enrichmentDetail).toContain('floor area from the description');
+  });
+
   it('stays a best guess when some close calls were never checked', async () => {
     const fetchMock = stubBlock(12);
     const result = await enrichWithEpc('token', listing());

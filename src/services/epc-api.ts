@@ -266,8 +266,12 @@ function toCandidate(result: EpcResult): AddressCandidate {
   };
 }
 
-function describeMatch(match: EpcMatch, postcode: string, unchecked: number): string {
-  const basis = match.reasons.length > 0 ? `matched on ${match.reasons.join(', ')}` : null;
+function describeMatch(match: EpcMatch, postcode: string, unchecked: number, listing: PropertyListing): string {
+  // Say so when the floor area came from the description, so the user can judge it
+  const reasons = listing.floorAreaSource === 'text'
+    ? match.reasons.map((r) => (r === 'floor area' ? 'floor area from the description' : r))
+    : match.reasons;
+  const basis = reasons.length > 0 ? `matched on ${reasons.join(', ')}` : null;
   if (match.confidence === 'exact') return basis ? `Exact: ${basis}` : 'Exact match';
   if (unchecked > 0) {
     return `${unchecked} close homes in ${postcode} could not be checked in full, so this is a best guess${basis ? ` (${basis})` : ''}`;
@@ -365,7 +369,7 @@ export async function enrichWithEpc(
             || (match.confidence === 'exact' ? result.currentEnergyRating || null : null),
         },
         enrichmentStatus: 'enriched',
-        enrichmentDetail: describeMatch(match, postcode, detailPass.unchecked),
+        enrichmentDetail: describeMatch(match, postcode, detailPass.unchecked, listing),
       };
     }
 
