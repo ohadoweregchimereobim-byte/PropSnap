@@ -119,15 +119,37 @@ function toEpcResult(row: EpcRow): EpcResult {
   };
 }
 
+// RdSAP certificates (2026 API) give type and form as number codes, e.g.
+// property_type 0 and built_form 1 for a "Detached house"
+const PROPERTY_TYPE_CODES: Record<string, string> = {
+  '0': 'House',
+  '1': 'Bungalow',
+  '2': 'Flat',
+  '3': 'Maisonette',
+  '4': 'Park home',
+};
+const BUILT_FORM_CODES: Record<string, string> = {
+  '1': 'Detached',
+  '2': 'Semi-Detached',
+  '3': 'End-Terrace',
+  '4': 'Mid-Terrace',
+  '5': 'Enclosed End-Terrace',
+  '6': 'Enclosed Mid-Terrace',
+};
+
 /**
  * Read property type, built form, floor area and habitable rooms from a
  * certificate, wherever they sit. Field names are matched loosely
  * (dwelling_type, dwellingType and DWELLING-TYPE are all the same) so search
  * rows, full certificates and older response shapes all work.
+ *
+ * Newer certificates wrap some values ({ value: "Detached house", language: "1" })
+ * and repeat floor areas per floor deep inside sap_building_parts, so the
+ * shallowest match wins and nothing below MAX_DEPTH counts.
  */
 export function readDetails(body: unknown): Pick<EpcResult, 'propertyType' | 'builtForm' | 'floorAreaSqm' | 'habitableRooms'> {
   const wanted: Record<string, string> = {
-    dwellingtype: 'propertyType', // e.g. "Semi-detached house", "Mid-floor flat"
+    dwellingtype: 'dwellingType', // e.g. "Semi-detached house", "Mid-floor flat"
     propertytype: 'propertyType',
     builtform: 'builtForm',
     totalfloorarea: 'floorAreaSqm',
@@ -135,30 +157,46 @@ export function readDetails(body: unknown): Pick<EpcResult, 'propertyType' | 'bu
     numberhabitablerooms: 'habitableRooms',
     habitablerooms: 'habitableRooms',
   };
+  const MAX_DEPTH = 3;
   const found: Record<string, unknown> = {};
 
-  const walk = (value: unknown, depth: number) => {
-    if (!value || typeof value !== 'object' || depth > 4) return;
-    for (const [key, child] of Object.entries(value)) {
-      const target = wanted[key.toLowerCase().replace(/[^a-z]/g, '')];
-      if (target && found[target] == null && child != null && typeof child !== 'object') {
-        found[target] = child;
-      } else {
-        walk(child, depth + 1);
+  // { value: 390, quantity: "square metres" } → 390
+  const unwrap = (v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v) && 'value' in v ? (v as { value: unknown }).value : v;
+
+  // Breadth first, so data.total_floor_area beats a single floor's area further down
+  let level: unknown[] = [body];
+  for (let depth = 0; depth < MAX_DEPTH && level.length > 0; depth++) {
+    const next: unknown[] = [];
+    for (const node of level) {
+      if (!node || typeof node !== 'object') continue;
+      for (const [key, child] of Object.entries(node)) {
+        const target = wanted[key.toLowerCase().replace(/[^a-z]/g, '')];
+        const value = unwrap(child);
+        if (target && found[target] == null && value != null && typeof value !== 'object') {
+          found[target] = value;
+        } else if (child && typeof child === 'object') {
+          next.push(child);
+        }
       }
     }
-  };
-  walk(body, 0);
+    level = next;
+  }
 
-  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() && !/^\d+$/.test(v.trim()) ? v.trim() : null);
+  const code = (v: unknown, codes: Record<string, string>) => (v == null ? null : codes[String(v).trim()] ?? null);
   const num = (v: unknown) => {
     const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
+  // Words beat codes: "Detached house" says more than property_type 0 ("House")
+  const propertyType = text(found.dwellingType) ?? text(found.propertyType) ?? code(found.propertyType, PROPERTY_TYPE_CODES);
+  const builtForm = text(found.builtForm) ?? code(found.builtForm, BUILT_FORM_CODES);
+
   const details: ReturnType<typeof readDetails> = {};
-  if (text(found.propertyType)) details.propertyType = text(found.propertyType);
-  if (text(found.builtForm)) details.builtForm = text(found.builtForm);
+  if (propertyType) details.propertyType = propertyType;
+  if (builtForm) details.builtForm = builtForm;
   if (num(found.floorAreaSqm)) details.floorAreaSqm = num(found.floorAreaSqm);
   if (num(found.habitableRooms)) details.habitableRooms = num(found.habitableRooms);
   return details;
