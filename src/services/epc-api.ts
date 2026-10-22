@@ -289,8 +289,17 @@ export function isFullPostcode(postcode: string | null | undefined): postcode is
   return !!postcode && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(normalisePostcode(postcode));
 }
 
-function fullAddressOf(result: EpcResult): string {
-  return [...result.addressLines, result.postTown].filter(Boolean).join(', ');
+/**
+ * "7 MILTON GROVE, NEW MILTON" + post town "NEW MILTON" → "7 MILTON GROVE, NEW MILTON".
+ * Some certificates repeat the town as the last address line, so a part
+ * equal to the one before it is dropped.
+ */
+export function fullAddressOf(result: Pick<EpcResult, 'addressLines' | 'postTown'>): string {
+  const parts: string[] = [];
+  for (const part of [...result.addressLines, result.postTown]) {
+    if (part && part.toLowerCase() !== parts[parts.length - 1]?.toLowerCase()) parts.push(part);
+  }
+  return parts.join(', ');
 }
 
 function toCandidate(result: EpcResult): AddressCandidate {
