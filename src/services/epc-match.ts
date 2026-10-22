@@ -13,7 +13,7 @@ import { epcBand } from '../adapters/epc-band';
  *   text names one ("Flat 12"), the certificate with that number gets a bonus.
  * - Floor area: within 10% of the listing is strong evidence, a big gap counts against.
  * - Property type: a flat vs house clash rules a home out; built form
- *   (detached, semi, terrace) adds a little.
+ *   (detached, semi, terrace) adds a little, and so does bungalow on both sides.
  * - Habitable rooms: usually bedrooms + 1 or 2 (living room, dining room).
  * - EPC band: when the listing shows one, homes with the same band (A-G) get a bonus.
  * - Street words and postcode, as before.
@@ -103,6 +103,7 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
   const listingTextNumber = listing.numberFromText?.toLowerCase() ?? null;
   const listingCategory = typeCategory(listing.propertyType);
   const listingForm = builtForm(listing.propertyType);
+  const listingBungalow = /bungalow/i.test(listing.propertyType ?? '');
   const listingBand = epcBand(listing.epcRating);
 
   return results.map((result) => {
@@ -143,6 +144,12 @@ export function scoreCandidates(results: EpcResult[], listing: PropertyListing):
         score += 2;
         reasons.push('property type');
       }
+    }
+    // Bungalow is a soft extra on top of "house": never a clash, because a
+    // chalet bungalow can be recorded as a house
+    if (listingBungalow && /bungalow/i.test(result.propertyType ?? '')) {
+      score += 1;
+      reasons.push('bungalow');
     }
     const epcForm = builtForm(result.builtForm ?? result.propertyType);
     if (listingForm && epcForm) {
