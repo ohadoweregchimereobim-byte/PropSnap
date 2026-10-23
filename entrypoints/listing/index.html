@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropSnap Listing</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <nav class="nav">
+      <a href="./dashboard.html" class="btn">← Dashboard</a>
+      <a id="openListing" class="btn" target="_blank" rel="noopener noreferrer" hidden>Open listing</a>
+    </nav>
+
+    <header class="header">
+      <h1 id="address">Loading…</h1>
+      <p id="listedAs" class="listed-as" hidden></p>
+      <p id="facts" class="facts"></p>
+    </header>
+
+    <p id="missing" class="notice" hidden>This listing is not saved any more. Go back to the dashboard.</p>
+
+    <section id="calculator" class="calculator" hidden aria-labelledby="calcTitle">
+      <div class="section-head">
+        <h2 id="calcTitle">Deal calculator</h2>
+        <button id="resetBtn" class="btn btn-small" type="button">Reset to listing figures</button>
+      </div>
+      <p class="disclaimer">Estimates only, not financial or tax advice. Your numbers are saved for this listing and stay when you capture it again.</p>
+
+      <div class="calc-grid">
+        <form id="dealForm" class="inputs" autocomplete="off">
+          <fieldset>
+            <legend>Purchase</legend>
+            <label>Price (£) <input type="number" data-field="price" min="0" step="1000" /></label>
+            <label>Country
+              <select data-field="region">
+                <option value="england">England (SDLT)</option>
+                <option value="wales">Wales (LTT)</option>
+              </select>
+            </label>
+            <p id="regionHint" class="hint" hidden>This postcode is on the England and Wales border. Check which country the home is in.</p>
+            <label>Buyer
+              <select data-field="buyer">
+                <option value="additional">Investor / 2nd home</option>
+                <option value="home_mover">Home mover</option>
+                <option value="first_time">First-time buyer</option>
+              </select>
+            </label>
+            <label>Legal fees and survey (£) <input type="number" data-field="buyingCosts" min="0" step="100" /></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Mortgage</legend>
+            <label>Deposit (%) <input type="number" data-field="depositPct" min="0" max="100" step="1" /></label>
+            <label>Interest rate (% a year) <input type="number" data-field="ratePct" min="0" step="0.05" /></label>
+            <label>Term (years) <input type="number" data-field="termYears" min="1" step="1" /></label>
+            <label>Type
+              <select data-field="mortgageType">
+                <option value="interest_only">Interest only</option>
+                <option value="repayment">Repayment</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Rent and running costs</legend>
+            <label>Rent (£ a month) <input type="number" data-field="rentMonthly" min="0" step="25" /></label>
+            <label>Letting agent (% of rent) <input type="number" data-field="managementPct" min="0" max="100" step="0.5" /></label>
+            <label>Repairs and empty months (% of rent) <input type="number" data-field="maintenancePct" min="0" max="100" step="0.5" /></label>
+            <label>Other costs (£ a month) <input type="number" data-field="otherMonthly" min="0" step="5" /></label>
+            <p class="hint">Other costs: insurance, ground rent, service charge, licence fees.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Refurbish and refinance (BRR)</legend>
+            <label>Refurbishment cost (£) <input type="number" data-field="refurbCost" min="0" step="1000" /></label>
+            <label>Value after the works (£) <input type="number" data-field="valueAfterRefurb" min="0" step="1000" /></label>
+            <label>New mortgage (% of the new value) <input type="number" data-field="refinanceLtvPct" min="0" max="100" step="1" /></label>
+          </fieldset>
+        </form>
+
+        <div class="results">
+          <p id="needPrice" class="notice" hidden>Type the purchase price to see the tax, yield and cashflow.</p>
+          <article class="card">
+            <h3 id="taxName">Stamp Duty</h3>
+            <p class="big" id="taxTotal">£0</p>
+            <table class="slices">
+              <tbody id="taxSlices"></tbody>
+            </table>
+            <p id="taxNote" class="hint" hidden></p>
+            <p id="taxYear" class="hint"></p>
+          </article>
+
+          <article class="card">
+            <h3>Buy-to-let</h3>
+            <p class="need-rent hint" hidden>Type the expected rent to see the yield and cashflow.</p>
+            <dl id="btlRows" class="rows"></dl>
+          </article>
+
+          <article class="card">
+            <h3>Buy, refurbish, refinance</h3>
+            <p class="need-rent hint" hidden>Type the expected rent to see the cashflow.</p>
+            <dl id="brrRows" class="rows"></dl>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import type { PropertyListing } from '../adapters/types';
 import { chooseCandidate, keepUserChoice } from './address-choice';
+import { clearUserData, removeUserData } from './user-data';
 
 const STORAGE_KEY = 'propsnap_listings';
 const SETTINGS_KEY = 'propsnap_settings';
@@ -58,7 +59,7 @@ export async function chooseAddress(source: string, listingId: string, certifica
 }
 
 /**
- * Delete a listing from storage.
+ * Delete a listing from storage, with what the user typed in for it.
  */
 export async function deleteListing(source: string, listingId: string): Promise<void> {
   const existing = await getListings();
@@ -67,13 +68,15 @@ export async function deleteListing(source: string, listingId: string): Promise<
     (l) => `${l.source}:${l.listingId}` !== key
   );
   await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await removeUserData(key);
 }
 
 /**
- * Clear all saved listings.
+ * Clear all saved listings, and what the user typed in for them.
  */
 export async function clearListings(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY);
+  await clearUserData();
 }
 
 /**
