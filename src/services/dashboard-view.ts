@@ -1,5 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import { priceChange } from './price-history';
+import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
+import type { UserDataMap } from './user-data';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -9,13 +11,16 @@ import { priceChange } from './price-history';
 export type MatchFilter = 'all' | 'exact' | 'user_choice' | 'best_guess' | 'none';
 /** Price moves PropSnap has seen between captures */
 export type PriceFilter = 'all' | 'reduced' | 'increased' | 'changed';
-export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName';
+/** A pipeline stage, or every active deal, or follow-ups due today or before */
+export type StatusFilter = 'all' | 'active' | 'due' | PipelineStatus;
+export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName' | 'status';
 
 export interface ViewOptions {
   search: string;
   source: PropertyListing['source'] | 'all';
   match: MatchFilter;
   price: PriceFilter;
+  status: StatusFilter;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
 }
@@ -25,6 +30,7 @@ export const DEFAULT_VIEW: ViewOptions = {
   source: 'all',
   match: 'all',
   price: 'all',
+  status: 'all',
   sortKey: 'capturedAt',
   sortDir: 'desc',
 };
@@ -36,15 +42,28 @@ export function matchGroup(listing: PropertyListing): Exclude<MatchFilter, 'all'
   return 'best_guess';
 }
 
-function searchText(l: PropertyListing): string {
-  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source]
+/** What the user saved for a listing in the pipeline, cleaned; null for none */
+export function pipelineOf(l: PropertyListing, userData: UserDataMap | undefined): Pipeline | null {
+  return cleanPipeline(userData?.[`${l.source}:${l.listingId}`]?.pipeline);
+}
+
+/** The user's context for filters that read their own data */
+export interface ViewContext {
+  userData?: UserDataMap;
+  /** YYYY-MM-DD in the user's time zone */
+  today: string;
+}
+
+function searchText(l: PropertyListing, pipeline: Pipeline | null): string {
+  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source, pipeline?.notes]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
 }
 
-function sortValue(l: PropertyListing, key: SortKey): string | number | null {
+function sortValue(l: PropertyListing, key: SortKey, pipeline: Pipeline | null): string | number | null {
   switch (key) {
+    case 'status': return STATUSES.findIndex((s) => s.value === (pipeline?.status ?? 'new'));
     case 'address': return (l.fullAddress || l.displayAddress || '').toLowerCase() || null;
     case 'postcode': return (l.postcode || l.postcodePartial || '').toUpperCase() || null;
     case 'price': return l.price;
@@ -57,10 +76,15 @@ function sortValue(l: PropertyListing, key: SortKey): string | number | null {
 }
 
 /** Listings that pass the filters, sorted. Blank values always go last. */
-export function applyView(listings: PropertyListing[], view: ViewOptions): PropertyListing[] {
+export function applyView(listings: PropertyListing[], view: ViewOptions, context: ViewContext = { today: '' }): PropertyListing[] {
   const words = view.search.toLowerCase().split(/\s+/).filter(Boolean);
+  const pipelines = new Map(listings.map((l) => [l, pipelineOf(l, context.userData)]));
 
   const kept = listings.filter((l) => {
+    const pipeline = pipelines.get(l) ?? null;
+    if (view.status === 'active' && !(pipeline && isActive(pipeline.status))) return false;
+    if (view.status === 'due' && !isDue(pipeline, context.today)) return false;
+    if (view.status !== 'all' && view.status !== 'active' && view.status !== 'due' && (pipeline?.status ?? 'new') !== view.status) return false;
     if (view.source !== 'all' && l.source !== view.source) return false;
     if (view.match !== 'all' && matchGroup(l) !== view.match) return false;
     if (view.price !== 'all') {
@@ -69,13 +93,13 @@ export function applyView(listings: PropertyListing[], view: ViewOptions): Prope
       if (view.price !== 'changed' && change.direction !== view.price) return false;
     }
     if (words.length === 0) return true;
-    const text = searchText(l);
+    const text = searchText(l, pipeline);
     return words.every((w) => text.includes(w));
   });
 
   const dir = view.sortDir === 'asc' ? 1 : -1;
   return kept
-    .map((l, i) => ({ l, i, v: sortValue(l, view.sortKey) }))
+    .map((l, i) => ({ l, i, v: sortValue(l, view.sortKey, pipelines.get(l) ?? null) }))
     .sort((a, b) => {
       if (a.v == null || b.v == null) return a.v == null ? (b.v == null ? a.i - b.i : 1) : -1;
       const diff = typeof a.v === 'number' && typeof b.v === 'number'
@@ -87,11 +111,17 @@ export function applyView(listings: PropertyListing[], view: ViewOptions): Prope
 }
 
 /** Counts for the summary bar */
-export function summarise(listings: PropertyListing[]): Record<Exclude<MatchFilter, 'all'> | 'total' | 'reduced', number> {
-  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0, reduced: 0 };
+export function summarise(
+  listings: PropertyListing[],
+  context: ViewContext = { today: '' },
+): Record<Exclude<MatchFilter, 'all'> | 'total' | 'reduced' | 'active' | 'due', number> {
+  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0, reduced: 0, active: 0, due: 0 };
   for (const l of listings) {
     counts[matchGroup(l)]++;
     if (priceChange(l)?.direction === 'reduced') counts.reduced++;
+    const pipeline = pipelineOf(l, context.userData);
+    if (pipeline && isActive(pipeline.status)) counts.active++;
+    if (isDue(pipeline, context.today)) counts.due++;
   }
   return counts;
 }

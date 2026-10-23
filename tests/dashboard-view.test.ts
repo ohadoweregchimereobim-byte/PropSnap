@@ -81,9 +81,39 @@ describe('price filter', () => {
   });
 });
 
+describe('pipeline filters', () => {
+  const today = '2026-10-23';
+  const userData = {
+    'rightmove:1': { pipeline: { status: 'viewing' as const, notes: 'Vendor wants a quick sale', followUp: '2026-10-20', updatedAt: '' } },
+    'zoopla:2': { pipeline: { status: 'passed' as const, notes: '', followUp: '2026-10-01', updatedAt: '' } },
+    'openrent:3': { pipeline: { status: 'offer' as const, notes: '', followUp: '2026-11-30', updatedAt: '' } },
+  };
+  const context = { userData, today };
+
+  it('filters by stage, active deals and follow-ups due', () => {
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, status: 'viewing' }, context))).toEqual(['1']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, status: 'active' }, context))).toEqual(['1', '3']);
+    // An overdue follow-up on a deal the user passed on is not due
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, status: 'due' }, context))).toEqual(['1']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, status: 'new' }, { today }))).toEqual(['1', '2', '3']);
+  });
+
+  it('searches the notes', () => {
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, search: 'quick sale' }, context))).toEqual(['1']);
+  });
+
+  it('sorts by stage', () => {
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, sortKey: 'status', sortDir: 'asc' }, context))).toEqual(['1', '3', '2']);
+  });
+
+  it('counts active deals and follow-ups due', () => {
+    expect(summarise(saved, context)).toMatchObject({ active: 2, due: 1 });
+  });
+});
+
 describe('summarise and matchGroup', () => {
   it('counts each match group', () => {
-    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0 });
+    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0, active: 0, due: 0 });
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road', addressConfidence: 'user_choice' }))).toBe('user_choice');
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road' }))).toBe('best_guess');
   });

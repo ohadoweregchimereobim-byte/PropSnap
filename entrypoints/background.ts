@@ -8,6 +8,7 @@
  */
 import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
 import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
+import { getAllUserData } from '../src/services/user-data';
 import type { PropertyListing } from '../src/adapters/types';
 import { applyFloorAreaSetting } from '../src/adapters/floor-area-text';
 
@@ -42,8 +43,8 @@ export default defineBackground(() => {
     }
 
     if (message.type === 'EXPORT_CSV') {
-      getListings()
-        .then((listings) => sendResponse({ success: true, csv: listingsToCsv(listings) }))
+      Promise.all([getListings(), getAllUserData()])
+        .then(([listings, userData]) => sendResponse({ success: true, csv: listingsToCsv(listings, userData) }))
         .catch((error) => sendResponse({ success: false, error: error.message }));
       return true;
     }

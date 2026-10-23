@@ -29,6 +29,19 @@
 
     <p id="missing" class="notice" hidden>This listing is not saved any more. Go back to the dashboard.</p>
 
+    <section id="pipeline" class="pipeline" hidden aria-labelledby="pipelineTitle">
+      <h2 id="pipelineTitle">Deal pipeline</h2>
+      <div class="pipeline-row">
+        <label>Stage <select id="pipelineStatus"></select></label>
+        <label>Follow up on <input id="pipelineFollowUp" type="date" /></label>
+        <button id="pipelineClearDate" class="btn btn-small" type="button">Clear date</button>
+        <span id="pipelineDue" class="due" hidden></span>
+      </div>
+      <label class="notes-label" for="pipelineNotes">Notes</label>
+      <textarea id="pipelineNotes" rows="4" maxlength="5000" placeholder="Viewing feedback, what the agent said, offers made…"></textarea>
+      <p id="pipelineSaved" class="hint"></p>
+    </section>
+
     <section id="sold" class="sold" hidden aria-labelledby="soldTitle">
       <div class="section-head">
         <h2 id="soldTitle">Sold prices nearby</h2>

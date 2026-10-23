@@ -7,7 +7,8 @@
  */
 import type { PropertyListing } from '../../src/adapters/types';
 import { getListings } from '../../src/services/storage';
-import { getUserData, listingKey, saveDealInputs } from '../../src/services/user-data';
+import { getUserData, listingKey, saveDealInputs, savePipeline } from '../../src/services/user-data';
+import { cleanPipeline, followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { safeLink } from '../../src/services/dashboard-view';
 import {
   brr,
@@ -35,6 +36,7 @@ const fields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectEle
 const key = new URLSearchParams(location.search).get('key') ?? '';
 let listing: PropertyListing | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let pipelineTimer: ReturnType<typeof setTimeout> | undefined;
 // False when the postcode is on the England and Wales border and the user has not picked a country
 let regionSure = true;
 // Sold prices for this listing; null until loaded
@@ -68,6 +70,7 @@ async function init() {
     }
   });
 
+  setUpPipeline();
   $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
   $('soldRefresh').addEventListener('click', loadSold);
@@ -105,7 +108,10 @@ async function loadListing(firstLoad: boolean) {
     }
 
     // Search again when the address changes; filters keep their setting
-    if (firstLoad) setTypeFilter();
+    if (firstLoad) {
+      setTypeFilter();
+      fillPipeline(cleanPipeline((await getUserData(key)).pipeline));
+    }
     if (firstLoad || before?.postcode !== listing.postcode || before?.fullAddress !== listing.fullAddress) {
       loadSold();
     } else {
@@ -121,6 +127,7 @@ function showHeader() {
   $('missing').hidden = !missing;
   $('calculator').hidden = missing;
   $('sold').hidden = missing;
+  $('pipeline').hidden = missing;
   if (!listing) {
     $('address').textContent = 'Listing not found';
     $('facts').textContent = '';
@@ -154,6 +161,62 @@ function showHeader() {
   const open = $('openListing') as HTMLAnchorElement;
   open.hidden = !href;
   if (href) open.href = href;
+}
+
+function setUpPipeline() {
+  $('pipelineStatus').replaceChildren(...STATUSES.map((s) => {
+    const option = document.createElement('option');
+    option.value = s.value;
+    option.textContent = s.label;
+    return option;
+  }));
+  const later = () => {
+    showDue();
+    clearTimeout(pipelineTimer);
+    pipelineTimer = setTimeout(saveThePipeline, 500);
+  };
+  $('pipelineStatus').addEventListener('change', later);
+  $('pipelineFollowUp').addEventListener('change', later);
+  $('pipelineNotes').addEventListener('input', later);
+  $('pipelineClearDate').addEventListener('click', () => {
+    ($('pipelineFollowUp') as HTMLInputElement).value = '';
+    later();
+  });
+}
+
+function fillPipeline(p: ReturnType<typeof cleanPipeline>) {
+  ($('pipelineStatus') as HTMLSelectElement).value = p?.status ?? 'new';
+  ($('pipelineFollowUp') as HTMLInputElement).value = p?.followUp ?? '';
+  ($('pipelineNotes') as HTMLTextAreaElement).value = p?.notes ?? '';
+  $('pipelineSaved').textContent = p?.updatedAt ? `Last saved ${new Date(p.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+  showDue();
+}
+
+function readPipeline() {
+  return {
+    status: ($('pipelineStatus') as HTMLSelectElement).value as PipelineStatus,
+    followUp: ($('pipelineFollowUp') as HTMLInputElement).value || null,
+    notes: ($('pipelineNotes') as HTMLTextAreaElement).value,
+  };
+}
+
+const DUE_TEXT = { overdue: 'Follow-up overdue', today: 'Follow up today', soon: 'Follow-up this week', later: '' };
+
+function showDue() {
+  const state = followUpState(cleanPipeline({ ...readPipeline(), updatedAt: '' }), localDate(new Date()));
+  const due = $('pipelineDue');
+  due.hidden = !state || state === 'later';
+  due.className = `due due-${state}`;
+  due.textContent = state ? DUE_TEXT[state] : '';
+}
+
+async function saveThePipeline() {
+  try {
+    await savePipeline(key, readPipeline());
+    $('pipelineSaved').textContent = 'Saved';
+  } catch (error: any) {
+    $('pipelineSaved').textContent = `Could not save: ${error.message}`;
+  }
 }
 
 /** How the price moved between captures; hidden until it has */
