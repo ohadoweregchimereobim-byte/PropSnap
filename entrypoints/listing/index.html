@@ -25,7 +25,7 @@
       <div class="section-head">
         <h2 id="soldTitle">Sold prices nearby</h2>
         <div class="sold-controls">
-          <label class="check"><input type="checkbox" id="sameType" /> <span id="sameTypeLabel">Same type only</span></label>
+          <select id="typeFilter" aria-label="Type of home"></select>
           <select id="sinceYears" aria-label="Sold since">
             <option value="2">Last 2 years</option>
             <option value="3">Last 3 years</option>
@@ -46,6 +46,7 @@
           <div class="stat"><span id="soldCount" class="stat-value">0</span><span id="soldCountLabel" class="stat-label">Sales</span></div>
           <div class="stat"><span id="soldAsking" class="stat-value">—</span><span class="stat-label">Asking price against the median</span></div>
         </div>
+        <p id="fewSales" class="hint few-sales" hidden></p>
         <p class="hint"><button id="useMedian" class="btn btn-small" type="button" hidden>Use the median as "Value after the works"</button></p>
 
         <div id="thisHome" class="this-home" hidden>

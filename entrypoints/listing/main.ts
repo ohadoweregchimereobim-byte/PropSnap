@@ -17,7 +17,7 @@ import {
   type DealInputs,
 } from '../../src/services/calculators';
 import { fetchSoldPrices, type SoldPrice } from '../../src/services/land-registry';
-import { lrTypeFor, saleAddress, soldPriceArea, soldPriceView, TYPE_NAMES } from '../../src/services/sold-prices';
+import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
 
 const LISTINGS_KEY = 'propsnap_listings';
 
@@ -67,7 +67,7 @@ async function init() {
     }
   });
 
-  $('sameType').addEventListener('change', renderSold);
+  $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
   $('soldRefresh').addEventListener('click', loadSold);
   $('useMedian').addEventListener('click', () => {
@@ -253,11 +253,13 @@ function calculate() {
 
 function setTypeFilter() {
   if (!listing) return;
-  const type = lrTypeFor(listing.propertyType);
-  const box = $('sameType') as HTMLInputElement;
-  box.disabled = !type;
-  box.checked = !!type;
-  $('sameTypeLabel').textContent = type ? `${TYPE_NAMES[type]} only` : 'Same type only (type not known)';
+  // The closest match comes first and is picked
+  $('typeFilter').replaceChildren(...typeChoices(listing.propertyType).map((choice) => {
+    const option = document.createElement('option');
+    option.value = choice.value;
+    option.textContent = choice.label;
+    return option;
+  }));
 }
 
 async function loadSold() {
@@ -302,10 +304,10 @@ function renderSold() {
     return;
   }
 
-  const sameType = ($('sameType') as HTMLInputElement).checked;
+  const choice = ($('typeFilter') as HTMLSelectElement).value;
   const years = ($('sinceYears') as HTMLSelectElement).value;
   const view = soldPriceView(sales, listing, {
-    type: sameType ? lrTypeFor(listing.propertyType) : null,
+    types: typeChoices(listing.propertyType).find((c) => c.value === choice)?.types ?? null,
     sinceYears: years ? Number(years) : null,
     today: new Date(),
   });
@@ -314,10 +316,15 @@ function renderSold() {
   $('soldBody').hidden = false;
 
   $('soldMedian').textContent = view.median == null ? '—' : money(view.median);
-  $('soldRange').textContent = view.low == null ? '—' : `${money(view.low)} to ${money(view.high!)}`;
+  $('soldRange').textContent = view.low == null ? '—' : view.low === view.high ? money(view.low) : `${money(view.low)} to ${money(view.high!)}`;
   $('soldCount').textContent = String(view.comparables.length);
   const used = view.comparables.filter((s) => s.standard).length;
   $('soldCountLabel').textContent = used === view.comparables.length ? 'Sales' : `Sales (${used} used in the figures)`;
+
+  // A median from one or two sales is not worth much; say so
+  const few = $('fewSales');
+  few.hidden = used === 0 || used >= FEW_SALES;
+  few.textContent = `Only ${used} sale${used === 1 ? '' : 's'} in the figures, so this is weak evidence. Try more years${choice === 'all' ? '' : ' or a wider type'}.`;
   const asking = $('soldAsking');
   asking.textContent = view.askingVsMedianPct == null
     ? '—'

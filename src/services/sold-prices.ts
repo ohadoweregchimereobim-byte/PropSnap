@@ -64,6 +64,29 @@ export function lrTypeFor(type: string | null | undefined): LrPropertyType | nul
   }
 }
 
+export type TypeChoice = 'same' | 'houses' | 'all';
+
+const HOUSES: LrPropertyType[] = ['detached', 'semi-detached', 'terraced'];
+
+/**
+ * The type filters that make sense for a listing, the closest match first:
+ * a terraced house gets "Terraced only", "All houses", "All types"; a flat
+ * gets "Flats only", "All types"; a bungalow (form not known) gets "All houses", "All types".
+ */
+export function typeChoices(listingType: string | null | undefined): Array<{ value: TypeChoice; label: string; types: LrPropertyType[] | null }> {
+  const same = lrTypeFor(listingType);
+  const choices: Array<{ value: TypeChoice; label: string; types: LrPropertyType[] | null }> = [];
+  if (same) choices.push({ value: 'same', label: same === 'flat-maisonette' ? 'Flats only' : `${TYPE_NAMES[same]} only`, types: [same] });
+  if (same !== 'flat-maisonette' && (same || typeCategory(listingType) === 'house')) {
+    choices.push({ value: 'houses', label: 'All houses', types: HOUSES });
+  }
+  choices.push({ value: 'all', label: 'All types', types: null });
+  return choices;
+}
+
+/** Fewer standard sales than this make a weak median */
+export const FEW_SALES = 5;
+
 const words = (text: string) => ` ${text.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()} `;
 
 /** True when a sale is the home at this full address (same number, flat and street) */
@@ -103,7 +126,7 @@ export function median(values: number[]): number | null {
 export function soldPriceView(
   sales: SoldPrice[],
   listing: Pick<PropertyListing, 'fullAddress' | 'price' | 'listingType'>,
-  options: { type: LrPropertyType | null; sinceYears: number | null; today: Date },
+  options: { types: LrPropertyType[] | null; sinceYears: number | null; today: Date },
 ): SoldPriceView {
   const thisHome = sales.filter((s) => isSameHome(s, listing.fullAddress));
   const since = options.sinceYears == null
@@ -113,7 +136,7 @@ export function soldPriceView(
 
   const comparables = sales.filter((s) =>
     !thisHome.includes(s)
-    && (options.type == null || s.propertyType === options.type)
+    && (options.types == null || options.types.includes(s.propertyType))
     && s.date >= since);
 
   const prices = comparables.filter((s) => s.standard).map((s) => s.price);
@@ -140,10 +163,20 @@ function titleCase(text: string): string {
     .join(' ');
 }
 
-/** "FLAT 3", "12", "HIGH STREET", "CARDIFF" → "Flat 3, 12 High Street, Cardiff" */
+/** A sale's address in normal case, with the building name apart from the street */
 export function saleAddress(sale: SoldPrice): string {
-  const line = [sale.paon, sale.street].filter(Boolean).join(' ');
-  return [sale.saon, line, sale.town].filter(Boolean).map((p) => titleCase(p!)).join(', ');
+  let parts: Array<string | null>;
+  if (!sale.paon || /^\d/.test(sale.paon)) {
+    // "FLAT 3", "12", "HIGH STREET" → "Flat 3, 12 High Street"
+    parts = [sale.saon, [sale.paon, sale.street].filter(Boolean).join(' ')];
+  } else if (sale.saon && /^\d+[A-Z]?$/.test(sale.saon)) {
+    // "15", "SYCAMORE COURT", "WOOLASTON AVENUE" → "15 Sycamore Court, Woolaston Avenue"
+    parts = [`${sale.saon} ${sale.paon}`, sale.street];
+  } else {
+    // "FLAT 3", "DOVERCOURT HOUSE", "FERRY COURT" → "Flat 3, Dovercourt House, Ferry Court"
+    parts = [sale.saon, sale.paon, sale.street];
+  }
+  return [...parts, sale.town].filter(Boolean).map((p) => titleCase(p!)).join(', ');
 }
 
 export const TYPE_NAMES: Record<LrPropertyType, string> = {

@@ -7,7 +7,7 @@ import {
   streetQuery,
   type SoldPrice,
 } from '../src/services/land-registry';
-import { isSameHome, lrTypeFor, median, saleAddress, soldPriceArea, soldPriceView } from '../src/services/sold-prices';
+import { isSameHome, lrTypeFor, median, saleAddress, soldPriceArea, soldPriceView, typeChoices } from '../src/services/sold-prices';
 
 const LR = 'http://landregistry.data.gov.uk/def/common/';
 const PPI = 'http://landregistry.data.gov.uk/def/ppi/';
@@ -194,7 +194,7 @@ describe('soldPriceView', () => {
   ];
 
   it("splits this home's history from the comparables and works out the median", () => {
-    const view = soldPriceView(sales, listing, { type: 'terraced', sinceYears: 5, today });
+    const view = soldPriceView(sales, listing, { types: ['terraced'], sinceYears: 5, today });
     expect(view.thisHome.map((s) => s.id)).toEqual(['own-2019']);
     expect(view.comparables.map((s) => s.id)).toEqual(['a', 'b', 'c']);
     // Repossessions and company sales (c) are listed but left out of the figures
@@ -205,12 +205,12 @@ describe('soldPriceView', () => {
   });
 
   it('can show every type and every year', () => {
-    const view = soldPriceView(sales, listing, { type: null, sinceYears: null, today });
+    const view = soldPriceView(sales, listing, { types: null, sinceYears: null, today });
     expect(view.comparables).toHaveLength(5);
   });
 
   it('has no asking-price comparison for a rent listing', () => {
-    expect(soldPriceView(sales, { ...listing, listingType: 'rent', price: 1_200 }, { type: null, sinceYears: null, today }).askingVsMedianPct).toBeNull();
+    expect(soldPriceView(sales, { ...listing, listingType: 'rent', price: 1_200 }, { types: null, sinceYears: null, today }).askingVsMedianPct).toBeNull();
   });
 
   it('median of an even and an empty list', () => {
@@ -222,5 +222,38 @@ describe('soldPriceView', () => {
 describe('saleAddress', () => {
   it('writes the address in normal case', () => {
     expect(saleAddress(sale({ saon: 'FLAT 3', paon: '12A' }))).toBe('Flat 3, 12A High Street, Cardiff');
+  });
+
+  it('keeps a building name apart from the street', () => {
+    expect(saleAddress(sale({ saon: '15', paon: 'SYCAMORE COURT', street: 'WOOLASTON AVENUE' })))
+      .toBe('15 Sycamore Court, Woolaston Avenue, Cardiff');
+    expect(saleAddress(sale({ saon: 'FLAT 3', paon: 'DOVERCOURT HOUSE', street: 'FERRY COURT' })))
+      .toBe('Flat 3, Dovercourt House, Ferry Court, Cardiff');
+    expect(saleAddress(sale({ paon: 'ROSE COTTAGE', street: 'MILL LANE' }))).toBe('Rose Cottage, Mill Lane, Cardiff');
+  });
+});
+
+describe('typeChoices', () => {
+  const values = (type: string | null) => typeChoices(type).map((c) => c.label);
+
+  it('offers the same type, then all houses, then all types', () => {
+    expect(values('Terraced')).toEqual(['Terraced only', 'All houses', 'All types']);
+    expect(values('Semi-Detached')).toEqual(['Semi-detached only', 'All houses', 'All types']);
+  });
+
+  it('has no "All houses" for a flat, and no "only" when the form is not known', () => {
+    expect(values('Flat')).toEqual(['Flats only', 'All types']);
+    expect(values('Bungalow')).toEqual(['All houses', 'All types']);
+    expect(values(null)).toEqual(['All types']);
+  });
+
+  it('"All houses" leaves the flats out', () => {
+    const houses = typeChoices('Terraced')[1]!;
+    const view = soldPriceView(
+      [sale({ id: 't' }), sale({ id: 's', propertyType: 'semi-detached' }), sale({ id: 'f', propertyType: 'flat-maisonette' })],
+      { fullAddress: null, price: null, listingType: 'sale' },
+      { types: houses.types, sinceYears: null, today: new Date('2026-10-23T00:00:00Z') },
+    );
+    expect(view.comparables.map((s) => s.id)).toEqual(['t', 's']);
   });
 });
