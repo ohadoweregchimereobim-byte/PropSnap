@@ -21,6 +21,52 @@
 
     <p id="missing" class="notice" hidden>This listing is not saved any more. Go back to the dashboard.</p>
 
+    <section id="sold" class="sold" hidden aria-labelledby="soldTitle">
+      <div class="section-head">
+        <h2 id="soldTitle">Sold prices nearby</h2>
+        <div class="sold-controls">
+          <label class="check"><input type="checkbox" id="sameType" /> <span id="sameTypeLabel">Same type only</span></label>
+          <select id="sinceYears" aria-label="Sold since">
+            <option value="2">Last 2 years</option>
+            <option value="3">Last 3 years</option>
+            <option value="5" selected>Last 5 years</option>
+            <option value="10">Last 10 years</option>
+            <option value="">All years (since 1995)</option>
+          </select>
+          <button id="soldRefresh" class="btn btn-small" type="button">Refresh</button>
+        </div>
+      </div>
+      <p id="soldWhere" class="disclaimer"></p>
+      <p id="soldStatus" class="notice" hidden></p>
+
+      <div id="soldBody" hidden>
+        <div class="sold-stats">
+          <div class="stat"><span id="soldMedian" class="stat-value">—</span><span class="stat-label">Median sold price</span></div>
+          <div class="stat"><span id="soldRange" class="stat-value small">—</span><span class="stat-label">Lowest to highest</span></div>
+          <div class="stat"><span id="soldCount" class="stat-value">0</span><span id="soldCountLabel" class="stat-label">Sales</span></div>
+          <div class="stat"><span id="soldAsking" class="stat-value">—</span><span class="stat-label">Asking price against the median</span></div>
+        </div>
+        <p class="hint"><button id="useMedian" class="btn btn-small" type="button" hidden>Use the median as "Value after the works"</button></p>
+
+        <div id="thisHome" class="this-home" hidden>
+          <h3>This home sold before</h3>
+          <ul id="thisHomeList"></ul>
+          <p id="thisHomeNote" class="hint" hidden>Based on the best-guess address. Check it on the dashboard.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table class="sold-table">
+            <thead>
+              <tr><th>Sold</th><th>Address</th><th>Type</th><th>Tenure</th><th class="num">Price</th><th><span class="sr-only">Notes</span></th></tr>
+            </thead>
+            <tbody id="soldRows"></tbody>
+          </table>
+        </div>
+        <p id="soldMore" class="hint" hidden></p>
+      </div>
+      <p class="attribution">Sales in England and Wales from HM Land Registry, usually 2 to 3 months behind. Contains HM Land Registry data © Crown copyright and database right. Licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener noreferrer">Open Government Licence v3.0</a>.</p>
+    </section>
+
     <section id="calculator" class="calculator" hidden aria-labelledby="calcTitle">
       <div class="section-head">
         <h2 id="calcTitle">Deal calculator</h2>

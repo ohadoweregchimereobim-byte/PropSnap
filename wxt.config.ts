@@ -13,6 +13,7 @@ export default defineConfig({
       'https://www.openrent.com/*',
       'https://www.openrent.co.uk/*',
       'https://api.get-energy-performance-data.communities.gov.uk/*',
+      'https://landregistry.data.gov.uk/*',
     ],
   },
 });

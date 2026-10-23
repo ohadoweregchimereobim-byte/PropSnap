@@ -16,6 +16,8 @@ import {
   RATES_YEAR,
   type DealInputs,
 } from '../../src/services/calculators';
+import { fetchSoldPrices, type SoldPrice } from '../../src/services/land-registry';
+import { lrTypeFor, saleAddress, soldPriceArea, soldPriceView, TYPE_NAMES } from '../../src/services/sold-prices';
 
 const LISTINGS_KEY = 'propsnap_listings';
 
@@ -34,6 +36,11 @@ let listing: PropertyListing | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 // False when the postcode is on the England and Wales border and the user has not picked a country
 let regionSure = true;
+// Sold prices for this listing; null until loaded
+let sales: SoldPrice[] | null = null;
+let soldRequest = 0;
+// Most rows the sold-price table shows
+const SOLD_ROWS = 50;
 
 init();
 
@@ -60,6 +67,18 @@ async function init() {
     }
   });
 
+  $('sameType').addEventListener('change', renderSold);
+  $('sinceYears').addEventListener('change', renderSold);
+  $('soldRefresh').addEventListener('click', loadSold);
+  $('useMedian').addEventListener('click', () => {
+    const value = Number(($('useMedian') as HTMLButtonElement).dataset.value);
+    const input = form.querySelector<HTMLInputElement>('[data-field=valueAfterRefurb]');
+    if (!input || !(value > 0)) return;
+    input.value = String(Math.round(value));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    setStatus('Value after the works set to the median sold price');
+  });
+
   // A new capture or a delete in another tab changes the listing
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && LISTINGS_KEY in changes) loadListing(false);
@@ -83,6 +102,14 @@ async function loadListing(firstLoad: boolean) {
       regionSure = prefill.regionSure;
       fillForm(prefill.inputs);
     }
+
+    // Search again when the address changes; filters keep their setting
+    if (firstLoad) setTypeFilter();
+    if (firstLoad || before?.postcode !== listing.postcode || before?.fullAddress !== listing.fullAddress) {
+      loadSold();
+    } else {
+      renderSold();
+    }
   } catch (error: any) {
     setStatus(`Could not read the listing: ${error.message}`);
   }
@@ -92,6 +119,7 @@ function showHeader() {
   const missing = !listing;
   $('missing').hidden = !missing;
   $('calculator').hidden = missing;
+  $('sold').hidden = missing;
   if (!listing) {
     $('address').textContent = 'Listing not found';
     $('facts').textContent = '';
@@ -221,6 +249,153 @@ function calculate() {
     ['Cashflow', `${money(deal.cashflowMonthly)} a month`, deal.cashflowMonthly < 0],
     ['Return on money left in', deal.returnOnMoneyLeftPct == null ? 'No money left in' : pct(deal.returnOnMoneyLeftPct), (deal.returnOnMoneyLeftPct ?? 0) < 0],
   ]);
+}
+
+function setTypeFilter() {
+  if (!listing) return;
+  const type = lrTypeFor(listing.propertyType);
+  const box = $('sameType') as HTMLInputElement;
+  box.disabled = !type;
+  box.checked = !!type;
+  $('sameTypeLabel').textContent = type ? `${TYPE_NAMES[type]} only` : 'Same type only (type not known)';
+}
+
+async function loadSold() {
+  if (!listing) return;
+  const request = ++soldRequest;
+  const area = soldPriceArea(listing);
+  sales = null;
+
+  const where = [
+    area.postcode ? `in ${area.postcode}` : null,
+    area.street && area.outcode ? `on ${titleCase(area.street)} (${area.outcode})` : null,
+  ].filter(Boolean);
+  $('soldWhere').textContent = where.length ? `Sales ${where.join(' and ')}.` : '';
+
+  if (where.length === 0) {
+    showSoldStatus('PropSnap needs the full postcode or the street name to find sold prices, and this listing has neither.');
+    return;
+  }
+
+  showSoldStatus('Asking HM Land Registry…');
+  try {
+    const found = await fetchSoldPrices(area);
+    if (request !== soldRequest) return;
+    sales = found;
+    renderSold();
+  } catch (error: any) {
+    if (request !== soldRequest) return;
+    showSoldStatus(`Could not get sold prices from HM Land Registry: ${error.message}. Click Refresh to try again.`);
+  }
+}
+
+function showSoldStatus(message: string) {
+  $('soldStatus').textContent = message;
+  $('soldStatus').hidden = false;
+  $('soldBody').hidden = true;
+}
+
+function renderSold() {
+  if (!listing || !sales) return;
+  if (sales.length === 0) {
+    showSoldStatus('HM Land Registry has no sales here. New streets, and homes not sold since 1995, have none.');
+    return;
+  }
+
+  const sameType = ($('sameType') as HTMLInputElement).checked;
+  const years = ($('sinceYears') as HTMLSelectElement).value;
+  const view = soldPriceView(sales, listing, {
+    type: sameType ? lrTypeFor(listing.propertyType) : null,
+    sinceYears: years ? Number(years) : null,
+    today: new Date(),
+  });
+
+  $('soldStatus').hidden = true;
+  $('soldBody').hidden = false;
+
+  $('soldMedian').textContent = view.median == null ? '—' : money(view.median);
+  $('soldRange').textContent = view.low == null ? '—' : `${money(view.low)} to ${money(view.high!)}`;
+  $('soldCount').textContent = String(view.comparables.length);
+  const used = view.comparables.filter((s) => s.standard).length;
+  $('soldCountLabel').textContent = used === view.comparables.length ? 'Sales' : `Sales (${used} used in the figures)`;
+  const asking = $('soldAsking');
+  asking.textContent = view.askingVsMedianPct == null
+    ? '—'
+    : `${view.askingVsMedianPct > 0 ? '+' : ''}${view.askingVsMedianPct.toFixed(1)}%`;
+  asking.title = view.askingVsMedianPct == null ? 'Shown for sale listings with a price' : 'Above zero: asking more than the median';
+
+  const useMedian = $('useMedian') as HTMLButtonElement;
+  useMedian.hidden = view.median == null;
+  useMedian.dataset.value = String(view.median ?? '');
+
+  $('thisHome').hidden = view.thisHome.length === 0;
+  $('thisHomeList').replaceChildren(...view.thisHome.map((s) => {
+    const li = document.createElement('li');
+    li.textContent = `${money(s.price)} in ${monthYear(s.date)}${s.standard ? '' : ' (not a standard sale)'}`;
+    return li;
+  }));
+  $('thisHomeNote').hidden = listing.addressConfidence !== 'best_guess';
+
+  const shown = view.comparables.slice(0, SOLD_ROWS);
+  const postcode = soldPriceArea(listing).postcode;
+  $('soldRows').replaceChildren(...shown.map((s) => soldRow(s, postcode)));
+  const more = $('soldMore');
+  more.hidden = view.comparables.length <= SOLD_ROWS;
+  more.textContent = `Showing the newest ${SOLD_ROWS} of ${view.comparables.length} sales. The figures above use all of them.`;
+  if (view.comparables.length === 0) {
+    $('soldRows').replaceChildren(emptyRow('No sales match these filters. Try more years or all types.'));
+  }
+}
+
+function soldRow(s: SoldPrice, postcode: string | null): HTMLTableRowElement {
+  const tr = document.createElement('tr');
+  const notes: string[] = [];
+  if (postcode && s.postcode === postcode) notes.push('Same postcode');
+  if (s.newBuild) notes.push('New build');
+  if (!s.standard) notes.push('Not a standard sale');
+
+  const cells = [
+    [monthYear(s.date), 'nowrap'],
+    [`${saleAddress(s)}${s.postcode ? ` ${s.postcode}` : ''}`, ''],
+    [TYPE_NAMES[s.propertyType], ''],
+    [s.tenure ? s.tenure.charAt(0).toUpperCase() + s.tenure.slice(1) : '—', ''],
+    [money(s.price), 'num nowrap'],
+  ] as const;
+  for (const [value, className] of cells) {
+    const td = document.createElement('td');
+    td.textContent = value;
+    if (className) td.className = className;
+    tr.append(td);
+  }
+
+  const noteCell = document.createElement('td');
+  for (const note of notes) {
+    const badge = document.createElement('span');
+    badge.className = note === 'Not a standard sale' ? 'tag tag-warn' : 'tag';
+    badge.textContent = note;
+    if (note === 'Not a standard sale') badge.title = 'For example a repossession or a sale to a company. Not used in the figures.';
+    noteCell.append(badge);
+  }
+  tr.append(noteCell);
+  return tr;
+}
+
+function emptyRow(message: string): HTMLTableRowElement {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = 6;
+  td.className = 'muted';
+  td.textContent = message;
+  tr.append(td);
+  return tr;
+}
+
+function monthYear(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function titleCase(text: string): string {
+  return text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 type Row = [label: string, value: string, bad?: boolean, help?: string];
