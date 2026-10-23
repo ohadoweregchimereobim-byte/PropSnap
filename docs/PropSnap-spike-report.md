@@ -65,8 +65,8 @@
 | Price (rent PCM) | HTML table row "Rent PCM" | £2,800.00 |
 | Bedrooms | Page title ("1 Bed Flat") | 1 |
 | Property type | URL slug + title | Flat |
-| Landlord name | Profile section `<p>` tag | Serhiy K. |
-| Landlord ID | Profile link `landlordID=` param | 9206477 |
+| Landlord name | Profile section `<p>` tag | Jane D. (example) |
+| Landlord ID | Profile link `landlordID=` param | 1234567 (example) |
 | Member since | Profile section | July 2026 |
 | Phone verified | Profile section (yes/no, not the actual number) | Yes |
 | Response rate | Profile section | 100% |

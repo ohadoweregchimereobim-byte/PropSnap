@@ -180,7 +180,7 @@ export class OpenRentAdapter implements SiteAdapter {
   /**
    * Extract landlord info from profile section.
    * Name is in a <p> tag near the profile image.
-   * Landlord ID is in a link: href="/search/searchbylandlord?landlordID=9206477"
+   * Landlord ID is in a link: href="/search/searchbylandlord?landlordID=1234567"
    */
   private extractLandlordInfo(): { name: string | null; landlordId: string | null } {
     let name: string | null = null;
