@@ -72,4 +72,16 @@ describe('listingsToCsv', () => {
     expect(cells['Price History']).toBe('2026-10-01 300000; 2026-10-12 290000');
     expect(row(listing())['Price Change']).toBe('');
   });
+
+  it('includes the stage, follow-up and notes', () => {
+    const csv = listingsToCsv([listing()], {
+      'openrent:1': { pipeline: { status: 'viewing', notes: 'Call =agent', followUp: '2026-10-30', updatedAt: '' } },
+    });
+    const [headers, cells] = csv.split('\n').map((line) => line.split(','));
+    const cell = (name: string) => cells![headers!.indexOf(name)];
+    expect(cell('Stage')).toBe('Viewing booked');
+    expect(cell('Follow Up')).toBe('2026-10-30');
+    expect(cell('Notes')).toBe('Call =agent');
+    expect(row(listing())['Stage']).toBe('New');
+  });
 });

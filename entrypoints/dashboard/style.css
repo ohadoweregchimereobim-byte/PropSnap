@@ -346,3 +346,42 @@ th button[aria-sort='descending']::after {
 .price-same {
   color: #64748b;
 }
+
+/* Deal pipeline */
+.stage-select {
+  max-width: 140px;
+  padding: 3px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  color: #1e293b;
+}
+
+.follow-up {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #64748b;
+}
+
+.follow-up-overdue {
+  color: #b91c1c;
+}
+
+.follow-up-today {
+  color: #92400e;
+}
+
+.follow-up-soon {
+  color: #1e40af;
+}
+
+.note {
+  max-width: 180px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #64748b;
+  cursor: help;
+}

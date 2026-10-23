@@ -1,6 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import { chooseCandidate, keepUserChoice } from './address-choice';
-import { clearUserData, removeUserData } from './user-data';
+import { clearUserData, removeUserData, type UserDataMap } from './user-data';
+import { cleanPipeline, statusLabel } from './pipeline';
 import { priceChange, withPriceHistory } from './price-history';
 
 const STORAGE_KEY = 'propsnap_listings';
@@ -103,7 +104,7 @@ export async function saveSettings(settings: Partial<PropSnapSettings>): Promise
 /**
  * Export listings as CSV string.
  */
-export function listingsToCsv(listings: PropertyListing[]): string {
+export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap = {}): string {
   if (listings.length === 0) return '';
 
   const headers = [
@@ -135,10 +136,14 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Latitude',
     'Longitude',
     'Captured At',
+    'Stage',
+    'Follow Up',
+    'Notes',
   ];
 
   const rows = listings.map((l) => {
     const change = priceChange(l);
+    const pipeline = cleanPipeline(userData[`${l.source}:${l.listingId}`]?.pipeline);
     return [
     l.source,
     l.listingId,
@@ -169,6 +174,9 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.latitude?.toString() ?? '',
     l.longitude?.toString() ?? '',
     l.capturedAt,
+    statusLabel(pipeline?.status),
+    pipeline?.followUp ?? '',
+    pipeline?.notes ?? '',
   ];
   });
 

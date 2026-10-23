@@ -26,10 +26,12 @@
       <div class="stat"><span id="statGuess" class="stat-value">0</span><span class="stat-label">Best guess</span></div>
       <div class="stat"><span id="statNone" class="stat-value">0</span><span class="stat-label">No full address</span></div>
       <div class="stat"><span id="statReduced" class="stat-value">0</span><span class="stat-label">Price reduced</span></div>
+      <div class="stat"><span id="statActive" class="stat-value">0</span><span class="stat-label">Active deals</span></div>
+      <div class="stat"><span id="statDue" class="stat-value">0</span><span class="stat-label">Follow-ups due</span></div>
     </section>
 
     <section class="toolbar" aria-label="Filters">
-      <input id="search" type="search" placeholder="Search address, postcode or agent" aria-label="Search" />
+      <input id="search" type="search" placeholder="Search address, postcode, agent or notes" aria-label="Search" />
       <select id="sourceFilter" aria-label="Site">
         <option value="all">All sites</option>
         <option value="rightmove">Rightmove</option>
@@ -49,6 +51,11 @@
         <option value="increased">Price increased</option>
         <option value="changed">Any price change</option>
       </select>
+      <select id="statusFilter" aria-label="Stage">
+        <option value="all">All stages</option>
+        <option value="active">Active deals</option>
+        <option value="due">Follow-ups due</option>
+      </select>
       <span id="shownCount" class="shown"></span>
     </section>
 
@@ -65,6 +72,7 @@
             <th><button data-sort="propertyType">Type</button></th>
             <th><button data-sort="epcRating">EPC</button></th>
             <th><button data-sort="agentName">Agent</button></th>
+            <th><button data-sort="status">Stage</button></th>
             <th><span class="sr-only">Actions</span></th>
           </tr>
         </thead>

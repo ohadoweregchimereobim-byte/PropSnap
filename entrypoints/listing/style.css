@@ -282,6 +282,90 @@ body {
   color: #64748b;
 }
 
+/* Deal pipeline */
+.pipeline {
+  margin-bottom: 28px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.pipeline[hidden] {
+  display: none;
+}
+
+.pipeline h2 {
+  margin-bottom: 10px;
+  font-size: 17px;
+}
+
+.pipeline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.pipeline-row label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #334155;
+}
+
+.pipeline select,
+.pipeline input,
+.pipeline textarea {
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.notes-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.pipeline textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.due {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.due[hidden] {
+  display: none;
+}
+
+.due-overdue {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.due-today {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.due-soon {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 /* Sold prices */
 .sold {
   margin-bottom: 28px;
