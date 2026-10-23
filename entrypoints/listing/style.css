@@ -42,12 +42,38 @@ body {
 
 .nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
 
 .nav [hidden] {
   display: none;
+}
+
+.nav-report {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.report-notes {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  color: #334155;
+}
+
+.btn-primary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1e40af;
 }
 
 /* Header */
@@ -524,4 +550,117 @@ body {
 
 .attribution a {
   color: inherit;
+}
+
+/* Report: hidden on screen, the only thing printed */
+.report {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  #app {
+    max-width: none;
+    padding: 0;
+  }
+
+  #app > :not(.report) {
+    display: none !important;
+  }
+
+  .report {
+    display: block;
+    color: #111;
+  }
+
+  .report h1 {
+    font-size: 18pt;
+  }
+
+  .report-subtitle {
+    margin: 2pt 0 10pt;
+    color: #444;
+  }
+
+  .report-section {
+    margin-top: 12pt;
+    break-inside: avoid-page;
+  }
+
+  .report h2 {
+    margin-bottom: 4pt;
+    padding-bottom: 2pt;
+    border-bottom: 1.5pt solid #1d4ed8;
+    font-size: 12.5pt;
+    color: #1e3a8a;
+  }
+
+  .report-rows {
+    display: grid;
+    grid-template-columns: 62mm 1fr;
+    column-gap: 6mm;
+  }
+
+  .report-rows dt,
+  .report-rows dd {
+    padding: 1.5pt 0;
+    border-bottom: 0.5pt solid #e5e7eb;
+  }
+
+  .report-rows dt {
+    color: #444;
+  }
+
+  .report-rows dd {
+    overflow-wrap: anywhere;
+  }
+
+  .report-table {
+    width: 100%;
+    margin-top: 6pt;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 2pt 4pt;
+    text-align: left;
+    border-bottom: 0.5pt solid #e5e7eb;
+  }
+
+  .report-table .num {
+    text-align: right;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+  }
+
+  .report-text {
+    margin-top: 4pt;
+    white-space: pre-wrap;
+  }
+
+  .report-note {
+    margin-top: 3pt;
+    font-size: 9pt;
+    color: #555;
+  }
+
+  .report-footer {
+    margin-top: 16pt;
+    padding-top: 4pt;
+    border-top: 0.5pt solid #ccc;
+    font-size: 8.5pt;
+    color: #666;
+  }
 }

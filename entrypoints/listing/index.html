@@ -11,6 +11,10 @@
     <nav class="nav">
       <a href="./dashboard.html" class="btn">← Dashboard</a>
       <a id="openListing" class="btn" target="_blank" rel="noopener noreferrer" hidden>Open listing</a>
+      <span id="reportControls" class="nav-report" hidden>
+        <label class="report-notes"><input type="checkbox" id="reportNotes" /> Include my stage and notes</label>
+        <button id="reportBtn" class="btn btn-primary" type="button">Save report as PDF</button>
+      </span>
     </nav>
 
     <header class="header">
@@ -176,6 +180,9 @@
     </section>
 
     <p id="status" class="status" role="status"></p>
+
+    <!-- Filled when the user saves a report; only shown when printing -->
+    <article id="report" class="report"></article>
   </main>
 
   <script type="module" src="./main.ts"></script>

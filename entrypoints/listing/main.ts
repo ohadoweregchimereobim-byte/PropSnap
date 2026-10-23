@@ -19,6 +19,7 @@ import {
 } from '../../src/services/calculators';
 import { fetchSoldPrices, type SoldPrice } from '../../src/services/land-registry';
 import { describeChange, priceChange } from '../../src/services/price-history';
+import { buildReport, type Report } from '../../src/services/report';
 import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
 
 const LISTINGS_KEY = 'propsnap_listings';
@@ -71,6 +72,7 @@ async function init() {
   });
 
   setUpPipeline();
+  $('reportBtn').addEventListener('click', saveReport);
   $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
   $('soldRefresh').addEventListener('click', loadSold);
@@ -128,6 +130,7 @@ function showHeader() {
   $('calculator').hidden = missing;
   $('sold').hidden = missing;
   $('pipeline').hidden = missing;
+  $('reportControls').hidden = missing;
   if (!listing) {
     $('address').textContent = 'Listing not found';
     $('facts').textContent = '';
@@ -394,6 +397,81 @@ async function loadSold() {
   }
 }
 
+/** The sold prices with the filters picked on the page */
+function currentSoldView(l: PropertyListing, all: SoldPrice[]) {
+  const typeSelect = $('typeFilter') as HTMLSelectElement;
+  const yearsSelect = $('sinceYears') as HTMLSelectElement;
+  const choice = typeSelect.value;
+  const view = soldPriceView(all, l, {
+    types: typeChoices(l.propertyType).find((c) => c.value === choice)?.types ?? null,
+    sinceYears: yearsSelect.value ? Number(yearsSelect.value) : null,
+    today: new Date(),
+  });
+  const filters = [typeSelect.selectedOptions[0]?.textContent, yearsSelect.selectedOptions[0]?.textContent?.toLowerCase()]
+    .filter(Boolean).join(', ');
+  return { view, choice, filters };
+}
+
+/** Build the report from what the page shows now, then open Chrome's print window */
+function saveReport() {
+  if (!listing) return;
+  const inputs = readForm();
+  const brrInputs = { ...inputs, valueAfterRefurb: inputs.valueAfterRefurb || inputs.price };
+  const report = buildReport({
+    listing,
+    sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: $('soldWhere').textContent ?? '' } : null,
+    deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs) },
+    pipeline: cleanPipeline({ ...readPipeline(), updatedAt: '' }),
+    includeNotes: ($('reportNotes') as HTMLInputElement).checked,
+    generatedAt: new Date(),
+  });
+  renderReport(report);
+
+  // The title becomes the PDF's file name
+  const title = document.title;
+  document.title = `PropSnap report - ${report.title}`;
+  window.addEventListener('afterprint', () => { document.title = title; }, { once: true });
+  window.print();
+}
+
+function renderReport(report: Report) {
+  const el = (tag: string, text?: string, className?: string) => {
+    const node = document.createElement(tag);
+    if (text != null) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+
+  const parts: HTMLElement[] = [el('h1', report.title), el('p', report.subtitle, 'report-subtitle')];
+  for (const section of report.sections) {
+    const box = el('section', undefined, 'report-section');
+    box.append(el('h2', section.heading));
+    if (section.rows?.length) {
+      const dl = el('dl', undefined, 'report-rows');
+      for (const [label, value] of section.rows) dl.append(el('dt', label), el('dd', value));
+      box.append(dl);
+    }
+    if (section.text) box.append(el('p', section.text, 'report-text'));
+    if (section.table?.rows.length) {
+      const table = el('table', undefined, 'report-table');
+      const head = el('tr');
+      section.table.head.forEach((h, i) => head.append(el('th', h, section.table!.numeric.includes(i) ? 'num' : undefined)));
+      table.append(el('thead'), el('tbody'));
+      table.firstChild!.appendChild(head);
+      for (const row of section.table.rows) {
+        const tr = el('tr');
+        row.forEach((cell, i) => tr.append(el('td', cell, section.table!.numeric.includes(i) ? 'num' : undefined)));
+        table.lastChild!.appendChild(tr);
+      }
+      box.append(table);
+    }
+    for (const note of section.notes ?? []) box.append(el('p', note, 'report-note'));
+    parts.push(box);
+  }
+  parts.push(el('p', report.footer, 'report-footer'));
+  $('report').replaceChildren(...parts);
+}
+
 function showSoldStatus(message: string) {
   $('soldStatus').textContent = message;
   $('soldStatus').hidden = false;
@@ -407,13 +485,7 @@ function renderSold() {
     return;
   }
 
-  const choice = ($('typeFilter') as HTMLSelectElement).value;
-  const years = ($('sinceYears') as HTMLSelectElement).value;
-  const view = soldPriceView(sales, listing, {
-    types: typeChoices(listing.propertyType).find((c) => c.value === choice)?.types ?? null,
-    sinceYears: years ? Number(years) : null,
-    today: new Date(),
-  });
+  const { view, choice } = currentSoldView(listing, sales);
 
   $('soldStatus').hidden = true;
   $('soldBody').hidden = false;
