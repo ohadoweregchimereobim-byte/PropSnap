@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropSnap Viewing Planner</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <nav class="nav">
+      <a href="./dashboard.html" class="btn">← Dashboard</a>
+    </nav>
+
+    <header class="header">
+      <h1>Viewing planner</h1>
+      <p class="hint">Tick homes on the dashboard and click Plan viewings to add them. Your plan is saved here.</p>
+    </header>
+
+    <section class="controls" aria-label="Viewing day">
+      <label>Day <input id="planDate" type="date" /></label>
+      <label>Start from <input id="planStart" type="text" placeholder="Your postcode, or leave empty for your location" maxlength="200" /></label>
+      <label>Minutes per viewing <input id="planMinutes" type="number" min="5" max="240" step="5" /></label>
+    </section>
+
+    <p id="empty" class="notice" hidden>No homes in the plan yet. Go to the dashboard, tick the homes you want to view, then click Plan viewings.</p>
+
+    <section id="planBody" hidden>
+      <div class="plan-head">
+        <p id="summary" class="summary"></p>
+        <div class="plan-actions">
+          <button id="bestOrder" class="btn" type="button" title="Shortest order by straight-line distance">Best order</button>
+          <button id="reverse" class="btn" type="button">Reverse</button>
+        </div>
+      </div>
+      <ol id="stops" class="stops"></ol>
+      <p id="clashNote" class="warn" hidden>Some times are earlier than the viewing before them. Check the times or the order.</p>
+
+      <div class="go">
+        <div id="routeLinks" class="route-links"></div>
+        <button id="calendarBtn" class="btn" type="button">Add to calendar (.ics)</button>
+      </div>
+      <p class="hint">Best order uses straight-line distance between the homes' map positions, not real roads or traffic. Google Maps takes up to 10 stops in one route; a longer day is split into parts. The calendar file opens in Google Calendar, Outlook or Apple Calendar, with one event per viewing that has a time.</p>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

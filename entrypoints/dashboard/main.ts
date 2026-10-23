@@ -61,6 +61,9 @@ const BADGES: Record<ReturnType<typeof matchGroup>, { text: string; style: strin
 };
 
 const view: ViewOptions = { ...DEFAULT_VIEW };
+// Homes ticked for the viewing planner; kept while the table redraws
+const picked = new Set<string>();
+const planBtn = document.getElementById('planBtn') as HTMLButtonElement;
 // Pickers the user opened stay open when the table redraws after a choice
 const openPickers = new Set<string>();
 const rowKey = (l: PropertyListing) => `${l.source}:${l.listingId}`;
@@ -92,6 +95,11 @@ async function init() {
   }
 
   document.getElementById('exportBtn')!.addEventListener('click', handleExport);
+  planBtn.addEventListener('click', () => {
+    // Ticked homes start a new plan; with none ticked, open the saved plan
+    const keys = listings.map(rowKey).filter((k) => picked.has(k));
+    location.href = keys.length ? `./planner.html?${new URLSearchParams({ keys: keys.join(',') })}` : './planner.html';
+  });
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
 
   // A capture in another tab saves here too, so redraw when storage changes
@@ -131,6 +139,11 @@ function render() {
     }
   }
 
+  // Forget ticks on homes that are gone
+  const known = new Set(listings.map(rowKey));
+  for (const k of [...picked]) if (!known.has(k)) picked.delete(k);
+  updatePlanButton();
+
   const shown = applyView(listings, view, context);
   rowsEl.replaceChildren(...shown.map(renderRow));
   shownEl.textContent = listings.length > 0 ? `Showing ${shown.length} of ${listings.length}` : '';
@@ -151,6 +164,7 @@ function renderRow(l: PropertyListing): HTMLTableRowElement {
   const tr = document.createElement('tr');
 
   tr.append(
+    pickCell(l),
     cell(formatDate(l.capturedAt), 'nowrap'),
     cell(SITE_NAMES[l.source] ?? l.source),
     addressCell(l),
@@ -172,6 +186,26 @@ function cell(text: string, className = ''): HTMLTableCellElement {
   td.textContent = text;
   if (className) td.className = className;
   if (text === '—') td.classList.add('muted');
+  return td;
+}
+
+function updatePlanButton() {
+  planBtn.textContent = picked.size ? `Plan viewings (${picked.size})` : 'Viewing planner';
+  planBtn.title = picked.size ? 'Plan a viewing day with the ticked homes' : 'Tick homes to plan a viewing day, or open the saved plan';
+}
+
+function pickCell(l: PropertyListing): HTMLTableCellElement {
+  const td = document.createElement('td');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = picked.has(rowKey(l));
+  box.setAttribute('aria-label', `Pick ${l.fullAddress || l.displayAddress} for viewings`);
+  box.addEventListener('change', () => {
+    if (box.checked) picked.add(rowKey(l));
+    else picked.delete(rowKey(l));
+    updatePlanButton();
+  });
+  td.append(box);
   return td;
 }
 
