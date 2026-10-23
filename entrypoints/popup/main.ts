@@ -10,6 +10,7 @@
  */
 
 import { downloadCsv } from '../../src/services/csv-download';
+import { latestMove } from '../../src/services/price-history';
 
 // DOM elements
 const statusEl = document.getElementById('status')!;
@@ -195,6 +196,17 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
     fields.price.textContent = `${formatted}${suffix}`;
   } else {
     fields.price.textContent = '—';
+  }
+
+  // Say when this capture found a new price
+  const move = latestMove(listing);
+  const moveEl = document.getElementById('resultPriceMove')!;
+  moveEl.hidden = !move || move.seenAt !== listing.capturedAt;
+  if (move) {
+    const money = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
+    const down = move.to < move.from;
+    moveEl.className = `price-move ${down ? 'price-reduced' : 'price-increased'}`;
+    moveEl.textContent = `${down ? 'Price reduced' : 'Price up'} since your last capture: ${money(move.from)} → ${money(move.to)}`;
   }
 
   resultCard.hidden = false;

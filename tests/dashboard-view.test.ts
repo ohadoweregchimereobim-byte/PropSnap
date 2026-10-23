@@ -62,9 +62,28 @@ describe('applyView', () => {
   });
 });
 
+describe('price filter', () => {
+  const point = (price: number, day: number) => ({ price, qualifier: null, seenAt: `2026-10-${String(day).padStart(2, '0')}T00:00:00Z` });
+  const moved = [
+    listing('cut', { price: 290_000, priceHistory: [point(300_000, 1), point(290_000, 9)] }),
+    listing('rise', { price: 310_000, priceHistory: [point(300_000, 1), point(310_000, 9)] }),
+    listing('flat', { price: 300_000, priceHistory: [point(300_000, 1)] }),
+  ];
+
+  it('shows reduced, increased or any change', () => {
+    expect(ids(applyView(moved, { ...DEFAULT_VIEW, price: 'reduced' }))).toEqual(['cut']);
+    expect(ids(applyView(moved, { ...DEFAULT_VIEW, price: 'increased' }))).toEqual(['rise']);
+    expect(ids(applyView(moved, { ...DEFAULT_VIEW, price: 'changed' }))).toEqual(['cut', 'rise']);
+  });
+
+  it('counts reduced listings', () => {
+    expect(summarise(moved).reduced).toBe(1);
+  });
+});
+
 describe('summarise and matchGroup', () => {
   it('counts each match group', () => {
-    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1 });
+    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0 });
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road', addressConfidence: 'user_choice' }))).toBe('user_choice');
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road' }))).toBe('best_guess');
   });

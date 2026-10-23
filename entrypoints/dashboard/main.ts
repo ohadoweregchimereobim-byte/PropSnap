@@ -9,6 +9,7 @@ import type { PropertyListing } from '../../src/adapters/types';
 import { chooseAddress, clearListings, deleteListing, getListings, listingsToCsv } from '../../src/services/storage';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
+import { describeChange, priceChange } from '../../src/services/price-history';
 import {
   applyView,
   DEFAULT_VIEW,
@@ -28,6 +29,7 @@ const shownEl = document.getElementById('shownCount')!;
 const searchInput = document.getElementById('search') as HTMLInputElement;
 const sourceSelect = document.getElementById('sourceFilter') as HTMLSelectElement;
 const matchSelect = document.getElementById('matchFilter') as HTMLSelectElement;
+const priceSelect = document.getElementById('priceFilter') as HTMLSelectElement;
 const sortButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('th button[data-sort]'));
 
 const stats = {
@@ -36,6 +38,7 @@ const stats = {
   user_choice: document.getElementById('statChosen')!,
   best_guess: document.getElementById('statGuess')!,
   none: document.getElementById('statNone')!,
+  reduced: document.getElementById('statReduced')!,
 };
 
 const SITE_NAMES: Record<PropertyListing['source'], string> = {
@@ -63,6 +66,7 @@ async function init() {
   searchInput.addEventListener('input', () => { view.search = searchInput.value; render(); });
   sourceSelect.addEventListener('change', () => { view.source = sourceSelect.value as ViewOptions['source']; render(); });
   matchSelect.addEventListener('change', () => { view.match = matchSelect.value as ViewOptions['match']; render(); });
+  priceSelect.addEventListener('change', () => { view.price = priceSelect.value as ViewOptions['price']; render(); });
 
   for (const button of sortButtons) {
     button.addEventListener('click', () => {
@@ -105,6 +109,7 @@ function render() {
   stats.user_choice.textContent = String(counts.user_choice);
   stats.best_guess.textContent = String(counts.best_guess);
   stats.none.textContent = String(counts.none);
+  stats.reduced.textContent = String(counts.reduced);
 
   for (const button of sortButtons) {
     if (button.dataset.sort === view.sortKey) {
@@ -138,7 +143,7 @@ function renderRow(l: PropertyListing): HTMLTableRowElement {
     cell(SITE_NAMES[l.source] ?? l.source),
     addressCell(l),
     cell(l.postcode || l.postcodePartial || '—', 'nowrap'),
-    cell(formatPrice(l), 'num nowrap'),
+    priceCell(l),
     cell(l.bedrooms?.toString() ?? '—', 'num'),
     cell(l.propertyType || '—'),
     cell(l.epcRating || '—'),
@@ -154,6 +159,21 @@ function cell(text: string, className = ''): HTMLTableCellElement {
   td.textContent = text;
   if (className) td.className = className;
   if (text === '—') td.classList.add('muted');
+  return td;
+}
+
+/** The price, with how it moved since the first capture */
+function priceCell(l: PropertyListing): HTMLTableCellElement {
+  const td = cell(formatPrice(l), 'num nowrap');
+  const change = priceChange(l);
+  if (change) {
+    const tag = document.createElement('div');
+    tag.className = `price-move price-${change.direction}`;
+    tag.textContent = describeChange(change);
+    tag.title = `First seen at ${formatMoney(change.first.price!)} on ${formatDate(change.first.seenAt)}; `
+      + `${change.moves} change${change.moves === 1 ? '' : 's'}, the last seen on ${formatDate(change.lastMoveAt!)}`;
+    td.append(tag);
+  }
   return td;
 }
 
@@ -326,13 +346,13 @@ function formatDate(iso: string): string {
   return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value);
+}
+
 function formatPrice(l: PropertyListing): string {
   if (!l.price) return '—';
-  const formatted = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    maximumFractionDigits: 0,
-  }).format(l.price);
+  const formatted = formatMoney(l.price);
   return l.listingType === 'rent' ? `${formatted} pcm` : formatted;
 }
 

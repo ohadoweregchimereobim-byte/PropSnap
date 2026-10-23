@@ -46,6 +46,16 @@ export interface PropertyListing {
 
   // Timestamps
   capturedAt: string;  // ISO 8601
+
+  /** Every price PropSnap has seen for this listing, oldest first (one point per change) */
+  priceHistory?: PricePoint[] | null;
+}
+
+/** A price seen at one capture */
+export interface PricePoint {
+  price: number | null;
+  qualifier: string | null; // "Guide price", "Offers over", ...
+  seenAt: string;           // ISO 8601, the capture that first saw it
 }
 
 /** One of the close homes from the EPC register, kept so the user can pick the right one */

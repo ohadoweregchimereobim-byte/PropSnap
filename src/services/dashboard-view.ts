@@ -1,4 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
+import { priceChange } from './price-history';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -6,12 +7,15 @@ import type { PropertyListing } from '../adapters/types';
  */
 
 export type MatchFilter = 'all' | 'exact' | 'user_choice' | 'best_guess' | 'none';
+/** Price moves PropSnap has seen between captures */
+export type PriceFilter = 'all' | 'reduced' | 'increased' | 'changed';
 export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName';
 
 export interface ViewOptions {
   search: string;
   source: PropertyListing['source'] | 'all';
   match: MatchFilter;
+  price: PriceFilter;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
 }
@@ -20,6 +24,7 @@ export const DEFAULT_VIEW: ViewOptions = {
   search: '',
   source: 'all',
   match: 'all',
+  price: 'all',
   sortKey: 'capturedAt',
   sortDir: 'desc',
 };
@@ -58,6 +63,11 @@ export function applyView(listings: PropertyListing[], view: ViewOptions): Prope
   const kept = listings.filter((l) => {
     if (view.source !== 'all' && l.source !== view.source) return false;
     if (view.match !== 'all' && matchGroup(l) !== view.match) return false;
+    if (view.price !== 'all') {
+      const change = priceChange(l);
+      if (!change) return false;
+      if (view.price !== 'changed' && change.direction !== view.price) return false;
+    }
     if (words.length === 0) return true;
     const text = searchText(l);
     return words.every((w) => text.includes(w));
@@ -77,9 +87,12 @@ export function applyView(listings: PropertyListing[], view: ViewOptions): Prope
 }
 
 /** Counts for the summary bar */
-export function summarise(listings: PropertyListing[]): Record<Exclude<MatchFilter, 'all'> | 'total', number> {
-  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0 };
-  for (const l of listings) counts[matchGroup(l)]++;
+export function summarise(listings: PropertyListing[]): Record<Exclude<MatchFilter, 'all'> | 'total' | 'reduced', number> {
+  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0, reduced: 0 };
+  for (const l of listings) {
+    counts[matchGroup(l)]++;
+    if (priceChange(l)?.direction === 'reduced') counts.reduced++;
+  }
   return counts;
 }
 

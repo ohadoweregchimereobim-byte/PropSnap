@@ -25,6 +25,7 @@
       <div class="stat"><span id="statChosen" class="stat-value">0</span><span class="stat-label">Your choice</span></div>
       <div class="stat"><span id="statGuess" class="stat-value">0</span><span class="stat-label">Best guess</span></div>
       <div class="stat"><span id="statNone" class="stat-value">0</span><span class="stat-label">No full address</span></div>
+      <div class="stat"><span id="statReduced" class="stat-value">0</span><span class="stat-label">Price reduced</span></div>
     </section>
 
     <section class="toolbar" aria-label="Filters">
@@ -41,6 +42,12 @@
         <option value="user_choice">Your choice</option>
         <option value="best_guess">Best guess</option>
         <option value="none">No full address</option>
+      </select>
+      <select id="priceFilter" aria-label="Price change">
+        <option value="all">All prices</option>
+        <option value="reduced">Price reduced</option>
+        <option value="increased">Price increased</option>
+        <option value="changed">Any price change</option>
       </select>
       <span id="shownCount" class="shown"></span>
     </section>

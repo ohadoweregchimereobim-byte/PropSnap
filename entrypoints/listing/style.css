@@ -66,6 +66,43 @@ body {
   color: #64748b;
 }
 
+.price-history {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.price-change {
+  font-weight: 700;
+}
+
+.price-reduced {
+  color: #166534;
+}
+
+.price-increased {
+  color: #b91c1c;
+}
+
+.price-same {
+  color: #64748b;
+}
+
+.price-history summary {
+  margin-top: 4px;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.history-table {
+  margin: 6px 0;
+  border-collapse: collapse;
+}
+
+.history-table td {
+  padding: 3px 14px 3px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
 .notice {
   padding: 16px;
   background: #fff;

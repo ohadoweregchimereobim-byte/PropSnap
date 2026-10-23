@@ -17,6 +17,7 @@ import {
   type DealInputs,
 } from '../../src/services/calculators';
 import { fetchSoldPrices, type SoldPrice } from '../../src/services/land-registry';
+import { describeChange, priceChange } from '../../src/services/price-history';
 import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
 
 const LISTINGS_KEY = 'propsnap_listings';
@@ -147,10 +148,49 @@ function showHeader() {
     listing.postcode || listing.postcodePartial,
   ].filter(Boolean).join(' · ');
 
+  showPriceHistory(listing);
+
   const href = safeLink(listing.url);
   const open = $('openListing') as HTMLAnchorElement;
   open.hidden = !href;
   if (href) open.href = href;
+}
+
+/** How the price moved between captures; hidden until it has */
+function showPriceHistory(l: PropertyListing) {
+  const change = priceChange(l);
+  $('priceHistory').hidden = !change;
+  if (!change) return;
+
+  const line = $('priceChangeLine');
+  line.className = `price-change price-${change.direction}`;
+  line.textContent = `${describeChange(change)} since ${shortDate(change.first.seenAt)}, from ${money(change.first.price!)}`;
+
+  const suffix = l.listingType === 'rent' ? ' a month' : '';
+  const points = l.priceHistory ?? [];
+  $('priceHistoryRows').replaceChildren(...points.map((p, i) => {
+    const tr = document.createElement('tr');
+    const before = points.slice(0, i).reverse().find((q) => q.price);
+    const step = p.price && before?.price ? p.price - before.price : 0;
+    const cells = [
+      shortDate(p.seenAt),
+      p.price ? `${money(p.price)}${suffix}` : 'No price',
+      p.qualifier ?? '',
+      step ? `${step > 0 ? '+' : '−'}${money(Math.abs(step))}` : '',
+    ];
+    cells.forEach((text, n) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (n === 1 || n === 3) td.className = 'num';
+      if (n === 3 && step) td.classList.add(step < 0 ? 'price-reduced' : 'price-increased');
+      tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function fillForm(inputs: DealInputs) {
