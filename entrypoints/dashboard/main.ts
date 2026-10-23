@@ -263,6 +263,13 @@ function actionsCell(l: PropertyListing): HTMLTableCellElement {
   const wrap = document.createElement('div');
   wrap.className = 'row-actions';
 
+  const details = document.createElement('a');
+  details.className = 'btn btn-row';
+  details.href = `./listing.html?key=${encodeURIComponent(rowKey(l))}`;
+  details.textContent = 'Details';
+  details.title = 'Deal calculator for this listing';
+  wrap.append(details);
+
   const href = safeLink(l.url);
   if (href) {
     const open = document.createElement('a');
