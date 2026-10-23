@@ -71,6 +71,16 @@ body {
   background: #f1f5f9;
 }
 
+.btn-primary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1e40af;
+}
+
 .btn-danger {
   color: #991b1b;
 }
