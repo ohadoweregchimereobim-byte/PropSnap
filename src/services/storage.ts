@@ -1,6 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, removeUserData } from './user-data';
+import { priceChange, withPriceHistory } from './price-history';
 
 const STORAGE_KEY = 'propsnap_listings';
 const SETTINGS_KEY = 'propsnap_settings';
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS: PropSnapSettings = {
 
 /**
  * Save a captured listing to Chrome extension storage.
- * Returns the listing as saved (a home the user picked earlier is kept).
+ * Returns the listing as saved (a home the user picked earlier, and the
+ * prices seen before, are kept).
  */
 export async function saveListing(listing: PropertyListing): Promise<PropertyListing> {
   const existing = await getListings();
@@ -31,7 +33,8 @@ export async function saveListing(listing: PropertyListing): Promise<PropertyLis
     (l) => `${l.source}:${l.listingId}` !== key
   );
 
-  const saved = keepUserChoice(previous, listing);
+  // Keep the user's pick of home, and every price seen before
+  const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
   filtered.unshift(saved); // Most recent first
 
   await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
@@ -114,6 +117,9 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Postcode',
     'Price',
     'Price Qualifier',
+    'First Price Seen',
+    'Price Change',
+    'Price History',
     'Listing Type',
     'Bedrooms',
     'Property Type',
@@ -131,7 +137,9 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     'Captured At',
   ];
 
-  const rows = listings.map((l) => [
+  const rows = listings.map((l) => {
+    const change = priceChange(l);
+    return [
     l.source,
     l.listingId,
     l.url,
@@ -142,6 +150,10 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.postcode ?? l.postcodePartial ?? '',
     l.price?.toString() ?? '',
     l.priceQualifier ?? '',
+    change?.first.price?.toString() ?? '',
+    change?.change.toString() ?? '',
+    // "2026-10-01 300000; 2026-10-12 290000"
+    (l.priceHistory ?? []).map((p) => `${p.seenAt.slice(0, 10)} ${p.price ?? ''}`.trim()).join('; '),
     l.listingType,
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',
@@ -157,7 +169,8 @@ export function listingsToCsv(listings: PropertyListing[]): string {
     l.latitude?.toString() ?? '',
     l.longitude?.toString() ?? '',
     l.capturedAt,
-  ]);
+  ];
+  });
 
   const escape = (raw: string) => {
     // Listing text comes from other websites. Excel runs a cell that starts

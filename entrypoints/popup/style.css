@@ -207,3 +207,18 @@ body {
 .field input[type="checkbox"] {
   margin-right: 6px;
 }
+
+/* Price move found by this capture */
+.price-move {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.price-reduced {
+  color: #166534;
+}
+
+.price-increased {
+  color: #b91c1c;
+}

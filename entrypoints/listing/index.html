@@ -17,6 +17,14 @@
       <h1 id="address">Loading…</h1>
       <p id="listedAs" class="listed-as" hidden></p>
       <p id="facts" class="facts"></p>
+      <div id="priceHistory" class="price-history" hidden>
+        <p id="priceChangeLine" class="price-change"></p>
+        <details>
+          <summary>Price history</summary>
+          <table class="history-table"><tbody id="priceHistoryRows"></tbody></table>
+          <p class="hint">PropSnap sees a price when you capture the listing, so each date is the capture that first saw it, not the day the agent changed it.</p>
+        </details>
+      </div>
     </header>
 
     <p id="missing" class="notice" hidden>This listing is not saved any more. Go back to the dashboard.</p>

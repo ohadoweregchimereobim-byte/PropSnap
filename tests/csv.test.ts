@@ -57,4 +57,19 @@ describe('listingsToCsv', () => {
     expect(cells['Agent Branch']).toBe('Cardiff Bay');
     expect(cells['Match Detail']).toBe('Exact: matched on house number');
   });
+
+  it('includes the first price, the change and the price history', () => {
+    const cells = row(listing({
+      listingType: 'sale',
+      price: 290_000,
+      priceHistory: [
+        { price: 300_000, qualifier: null, seenAt: '2026-10-01T09:00:00Z' },
+        { price: 290_000, qualifier: null, seenAt: '2026-10-12T09:00:00Z' },
+      ],
+    }));
+    expect(cells['First Price Seen']).toBe('300000');
+    expect(cells['Price Change']).toBe('-10000');
+    expect(cells['Price History']).toBe('2026-10-01 300000; 2026-10-12 290000');
+    expect(row(listing())['Price Change']).toBe('');
+  });
 });
