@@ -1,5 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
-import { priceChange } from './price-history';
+import { daysOnMarket, priceMoved, wasIncreased, wasReduced } from './price-history';
 import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
 import { listingKey, type UserDataMap } from './user-data';
 import { cleanActivity, cleanLabels } from './crm';
@@ -27,6 +27,8 @@ export interface ViewOptions {
   /** A label, or 'all' */
   label: string;
   hidden: HiddenFilter;
+  /** Only homes the site says have been on the market at least this many days; 0 for all */
+  minDays: number;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
 }
@@ -39,6 +41,7 @@ export const DEFAULT_VIEW: ViewOptions = {
   status: 'all',
   label: 'all',
   hidden: 'hide',
+  minDays: 0,
   sortKey: 'capturedAt',
   sortDir: 'desc',
 };
@@ -108,11 +111,11 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
     if (view.status !== 'all' && view.status !== 'active' && view.status !== 'due' && (pipeline?.status ?? 'new') !== view.status) return false;
     if (view.source !== 'all' && l.source !== view.source) return false;
     if (view.match !== 'all' && matchGroup(l) !== view.match) return false;
-    if (view.price !== 'all') {
-      const change = priceChange(l);
-      if (!change) return false;
-      if (view.price !== 'changed' && change.direction !== view.price) return false;
-    }
+    // A change PropSnap saw between captures, or one the site itself shows
+    if (view.price === 'reduced' && !wasReduced(l)) return false;
+    if (view.price === 'increased' && !wasIncreased(l)) return false;
+    if (view.price === 'changed' && !priceMoved(l)) return false;
+    if (view.minDays > 0 && !((daysOnMarket(l, context.today) ?? -1) >= view.minDays)) return false;
     if (words.length === 0) return true;
     const text = searchText(l, pipeline, labels, context.userData);
     return words.every((w) => text.includes(w));
@@ -140,7 +143,7 @@ export function summarise(
   for (const l of listings) {
     if (isHidden(l, context.userData)) counts.hidden++;
     counts[matchGroup(l)]++;
-    if (priceChange(l)?.direction === 'reduced') counts.reduced++;
+    if (wasReduced(l)) counts.reduced++;
     const pipeline = pipelineOf(l, context.userData);
     if (pipeline && isActive(pipeline.status)) counts.active++;
     if (isDue(pipeline, context.today)) counts.due++;

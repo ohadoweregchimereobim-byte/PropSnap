@@ -340,6 +340,12 @@ th button[aria-sort='descending']::after {
 }
 
 /* Price moves between captures */
+.on-market {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #64748b;
+}
+
 .price-move {
   margin-top: 2px;
   font-size: 11px;

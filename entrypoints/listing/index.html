@@ -47,9 +47,11 @@
       <h1 id="address">Loading…</h1>
       <p id="listedAs" class="listed-as" hidden></p>
       <p id="facts" class="facts"></p>
+      <p id="onMarket" class="on-market" hidden></p>
       <div id="priceHistory" class="price-history" hidden>
         <p id="priceChangeLine" class="price-change"></p>
-        <details>
+        <p id="portalChangeLine" class="price-change price-reduced" hidden></p>
+        <details id="capturedHistory">
           <summary>Price history</summary>
           <table class="history-table"><tbody id="priceHistoryRows"></tbody></table>
           <p class="hint">PropSnap sees a price when you capture the listing, so each date is the capture that first saw it, not the day the agent changed it.</p>

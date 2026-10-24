@@ -58,15 +58,20 @@ describe('Rightmove', () => {
     customer: { companyName: 'Jeffrey Ross', branchDisplayName: 'Jeffrey Ross, Cathays' },
     contactInfo: { telephoneNumbers: { localNumber: '029 2000 0000' } },
     tenure: { tenureType: 'FREEHOLD' },
+    listingHistory: { listingUpdateReason: 'Reduced on 12/10/2026' },
   };
+  // Where a saved Rightmove page keeps the date the listing was added
+  const analyticsInfo = { analyticsProperty: { added: '20260918' } };
   const page = (model: unknown) => `<!doctype html><html><head><title>Rightmove</title></head><body>
     <script>window.__PAGE_MODEL = ${JSON.stringify({ data: JSON.stringify(model) })};</script>
   </body></html>`;
   const url = 'https://www.rightmove.co.uk/properties/160123456#/';
 
   it('reads the listing from the packed page model', async () => {
-    const listing = await capture(url, page(pack({ propertyData })));
+    const listing = await capture(url, page(pack({ propertyData, analyticsInfo })));
     expect(listing).toMatchObject({
+      listedOn: '2026-09-18',
+      portalPriceChanges: [{ date: '2026-10-12', direction: 'down' }],
       source: 'rightmove',
       listingId: '160123456',
       displayAddress: 'Tweedsmuir Road, Cardiff, CF24',
@@ -118,6 +123,9 @@ describe('Zoopla', () => {
     price: 185000, price_qualifier: 'guide_price', num_beds: 2, property_type: 'flat',
     branch_name: 'Moginie James', tenure: 'leasehold', epcRating: 'C',
     latitude: 51.4655, longitude: -3.1733, redirectPhone: '029 2111 1111',
+    // As on a saved Zoopla page: first published, and dated price changes without amounts
+    publishedOn: '2026-03-06T16:13:52',
+    priceHistory: { priceChanges: [{ isPriceDrop: true, priceChangeDate: '2026-04-07T09:56:04' }, { isPriceDrop: true, priceChangeDate: '2026-08-28T14:37:57' }] },
   }).replace(/"/g, '\\"');
   const page = `<!doctype html><html><head>
     <meta name="description" content="2 bed flat for sale in Ferry Court">
@@ -142,6 +150,8 @@ describe('Zoopla', () => {
       agentPhone: '029 2111 1111',
       latitude: 51.4655,
       longitude: -3.1733,
+      listedOn: '2026-03-06',
+      portalPriceChanges: [{ date: '2026-04-07', direction: 'down' }, { date: '2026-08-28', direction: 'down' }],
     });
   });
 

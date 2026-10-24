@@ -130,15 +130,22 @@ export const outcomeLabel = (outcome: CallOutcome | undefined) => CALL_OUTCOMES.
 /** One line in the timeline */
 export interface TimelineItem {
   at: string;
-  kind: Activity['kind'] | 'price' | 'captured';
+  kind: Activity['kind'] | 'price' | 'captured' | 'listed';
   title: string;
   text: string;
   /** Set on the user's own entries, so they can be deleted */
   id?: string;
 }
 
-/** The user's activity with the listing's price changes and first capture, newest first */
-export function timeline(activity: Activity[], priceHistory: PricePoint[] | null | undefined): TimelineItem[] {
+/**
+ * The user's activity with the listing's price changes and first capture,
+ * and the date the site first listed it when known, newest first
+ */
+export function timeline(
+  activity: Activity[],
+  priceHistory: PricePoint[] | null | undefined,
+  listed?: { on: string | null | undefined; site: string } | null,
+): TimelineItem[] {
   const items: TimelineItem[] = activity.map((a) => ({
     at: a.at,
     kind: a.kind,
@@ -165,6 +172,10 @@ export function timeline(activity: Activity[], priceHistory: PricePoint[] | null
       text: `${formatMoney(before)} → ${formatMoney(p.price!)}`,
     });
   });
+
+  if (listed?.on && /^\d{4}-\d{2}-\d{2}$/.test(listed.on)) {
+    items.push({ at: `${listed.on}T00:00:00.000Z`, kind: 'listed', title: `Listed on ${listed.site}`, text: '' });
+  }
 
   return items.sort((a, b) => b.at.localeCompare(a.at));
 }

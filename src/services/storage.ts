@@ -2,9 +2,9 @@ import type { PropertyListing } from '../adapters/types';
 import type { EpcEnergy } from './epc-energy';
 import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
-import { cleanPipeline, statusLabel } from './pipeline';
+import { cleanPipeline, localDate, statusLabel } from './pipeline';
 import { cleanActivity, cleanLabels, lastCall, outcomeLabel } from './crm';
-import { priceChange, withPriceHistory } from './price-history';
+import { daysOnMarket, portalChanges, priceChange, withPriceHistory } from './price-history';
 import { withLock } from './storage-lock';
 
 export const LISTINGS_KEY = 'propsnap_listings';
@@ -136,7 +136,7 @@ export function saveSettings(settings: Partial<PropSnapSettings>): Promise<void>
 /**
  * Export listings as CSV string.
  */
-export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap = {}): string {
+export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap = {}, today = localDate(new Date())): string {
   if (listings.length === 0) return '';
 
   const headers = [
@@ -153,6 +153,9 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     'First Price Seen',
     'Price Change',
     'Price History',
+    'Listed On',
+    'Days On Market',
+    'Site Price Changes',
     'Listing Type',
     'Bedrooms',
     'Property Type',
@@ -198,6 +201,10 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     change?.change.toString() ?? '',
     // "2026-10-01 300000; 2026-10-12 290000"
     (l.priceHistory ?? []).map((p) => `${p.seenAt.slice(0, 10)} ${p.price ?? ''}`.trim()).join('; '),
+    l.listedOn ?? '',
+    daysOnMarket(l, today)?.toString() ?? '',
+    // "2026-04-07 down; 2026-08-28 down": the site's own changes, which have no amounts
+    portalChanges(l).map((c) => `${c.date} ${c.direction}`).join('; '),
     l.listingType,
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',

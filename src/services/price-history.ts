@@ -1,10 +1,13 @@
-import type { PricePoint, PropertyListing } from '../adapters/types';
-import { formatMoney } from './format';
+import type { PortalPriceChange, PricePoint, PropertyListing } from '../adapters/types';
+import { cleanPortalChanges } from '../adapters/listing-dates';
+import { formatMoney, SITE_NAMES } from './format';
 
 /**
  * Price changes between captures of the same listing. Pure, so it is unit
  * tested without storage. PropSnap only knows the prices it saw: a change
- * between two captures is dated by the capture that saw it.
+ * between two captures is dated by the capture that saw it. Rightmove and
+ * Zoopla also say when a listing was added and when its price changed (dates
+ * only, no amounts); those are kept too and count as changes here.
  */
 
 /** Oldest points are dropped beyond this */
@@ -14,7 +17,11 @@ function pointOf(l: PropertyListing): PricePoint {
   return { price: l.price ?? null, qualifier: l.priceQualifier ?? null, seenAt: l.capturedAt };
 }
 
-/** The new capture with the earlier prices kept, plus its own price when it is new */
+/**
+ * The new capture with the earlier prices kept, plus its own price when it is
+ * new. The site's own price changes add up across captures (Rightmove shows
+ * only the latest), and its first-listed date stays when a capture lacks it.
+ */
 export function withPriceHistory(previous: PropertyListing | undefined, next: PropertyListing): PropertyListing {
   const history = previous?.priceHistory?.length
     ? [...previous.priceHistory]
@@ -24,7 +31,12 @@ export function withPriceHistory(previous: PropertyListing | undefined, next: Pr
   const point = pointOf(next);
   if (!last || last.price !== point.price || last.qualifier !== point.qualifier) history.push(point);
 
-  return { ...next, priceHistory: history.slice(-MAX_POINTS) };
+  return {
+    ...next,
+    priceHistory: history.slice(-MAX_POINTS),
+    listedOn: next.listedOn ?? previous?.listedOn ?? null,
+    portalPriceChanges: cleanPortalChanges([...(previous?.portalPriceChanges ?? []), ...(next.portalPriceChanges ?? [])]),
+  };
 }
 
 export interface PriceChange {
@@ -89,4 +101,51 @@ export function describeChange(c: PriceChange): string {
   if (c.direction === 'reduced') return `Reduced ${formatMoney(-c.change)} (${pct})`;
   if (c.direction === 'increased') return `Up ${formatMoney(c.change)} (${pct})`;
   return 'Back to the first price';
+}
+
+// ── The site's own dates ─────────────────────────────────────────────────
+
+/** Whole days from the date the site listed the home to `today` (YYYY-MM-DD); null when the site does not say */
+export function daysOnMarket(l: Pick<PropertyListing, 'listedOn'>, today: string): number | null {
+  if (!l.listedOn || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null;
+  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${l.listedOn}T00:00:00Z`)) / 86_400_000);
+  return Number.isFinite(days) && days >= 0 ? days : null;
+}
+
+/** "232 days", "1 day", "today" */
+export function describeDays(days: number): string {
+  return days === 0 ? 'listed today' : `${days} day${days === 1 ? '' : 's'} on the market`;
+}
+
+export const portalChanges = (l: Pick<PropertyListing, 'portalPriceChanges'>): PortalPriceChange[] => cleanPortalChanges(l.portalPriceChanges);
+
+/** Reduced: PropSnap saw the price fall, or the site shows a drop */
+export function wasReduced(l: Pick<PropertyListing, 'priceHistory' | 'portalPriceChanges'>): boolean {
+  return priceChange(l)?.direction === 'reduced' || portalChanges(l).some((c) => c.direction === 'down');
+}
+
+export function wasIncreased(l: Pick<PropertyListing, 'priceHistory' | 'portalPriceChanges'>): boolean {
+  return priceChange(l)?.direction === 'increased' || portalChanges(l).some((c) => c.direction === 'up');
+}
+
+export function priceMoved(l: Pick<PropertyListing, 'priceHistory' | 'portalPriceChanges'>): boolean {
+  return priceChange(l) !== null || portalChanges(l).length > 0;
+}
+
+const shortDate = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** "Zoopla shows 2 price drops: 7 Apr 2026, 28 Aug 2026"; null when the site shows none */
+export function describePortalChanges(l: Pick<PropertyListing, 'portalPriceChanges' | 'source'>): string | null {
+  const changes = portalChanges(l);
+  if (changes.length === 0) return null;
+  const drops = changes.filter((c) => c.direction === 'down').length;
+  const rises = changes.length - drops;
+  const what = [drops ? `${drops} price drop${drops === 1 ? '' : 's'}` : '', rises ? `${rises} rise${rises === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  return `${SITE_NAMES[l.source]} shows ${what}: ${changes.map((c) => shortDate(c.date)).join(', ')}`;
+}
+
+/** The newest change the site shows, for a short tag: "Reduced 28 Aug 2026" */
+export function latestPortalChange(l: Pick<PropertyListing, 'portalPriceChanges'>): string | null {
+  const last = portalChanges(l).at(-1);
+  return last ? `${last.direction === 'down' ? 'Reduced' : 'Raised'} ${shortDate(last.date)}` : null;
 }

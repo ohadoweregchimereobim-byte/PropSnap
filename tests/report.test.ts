@@ -175,6 +175,16 @@ describe('buildReport', () => {
     expect(r.footer).toContain('Not financial or tax advice');
   });
 
+  it("shows the site's listed date and its price drops", () => {
+    const l = { ...listing, priceHistory: [listing.priceHistory![1]!], listedOn: '2026-03-06', portalPriceChanges: [{ date: '2026-08-28', direction: 'down' as const }] };
+    const r = buildReport(input({ listing: l, generatedAt: new Date('2026-10-24T12:00:00Z') }));
+    expect(row(r, 'Property', 'On the market')).toBe("Since 6 Mar 2026 (232 days, Zoopla's date)");
+    const prices = section(r, 'Price history')!;
+    expect(prices.notes).toEqual(['Zoopla shows 1 price drop: 28 Aug 2026 (the site does not show the amounts).']);
+    expect(prices.table).toBeUndefined();
+    expect(row(buildReport(input()), 'Property', 'On the market')).toBeUndefined();
+  });
+
   it('says it is not advice', () => {
     expect(buildReport(input()).footer).toContain('Not financial or tax advice');
   });
