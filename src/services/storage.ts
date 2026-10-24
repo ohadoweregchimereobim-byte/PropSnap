@@ -57,7 +57,8 @@ export async function getListings(): Promise<PropertyListing[]> {
 export function chooseAddress(source: string, listingId: string, certificateNumber: string): Promise<void> {
   return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
-    const index = existing.findIndex((l) => l.source === source && l.listingId === listingId);
+    const key = listingKey({ source, listingId });
+    const index = existing.findIndex((l) => listingKey(l) === key);
     if (index === -1) throw new Error('Listing not found');
 
     existing[index] = chooseCandidate(existing[index]!, certificateNumber);
@@ -69,7 +70,7 @@ export function chooseAddress(source: string, listingId: string, certificateNumb
  * Delete a listing from storage, with what the user typed in for it.
  */
 export async function deleteListing(source: string, listingId: string): Promise<void> {
-  const key = `${source}:${listingId}`;
+  const key = listingKey({ source, listingId });
   await withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
     const filtered = existing.filter((l) => listingKey(l) !== key);
@@ -91,7 +92,11 @@ export async function clearListings(): Promise<void> {
  */
 export async function getSettings(): Promise<PropSnapSettings> {
   const data = await chrome.storage.local.get(SETTINGS_KEY);
-  return { ...DEFAULT_SETTINGS, ...(data[SETTINGS_KEY] ?? {}) };
+  const saved = (data[SETTINGS_KEY] ?? {}) as Partial<Record<keyof PropSnapSettings, unknown>>;
+  // A value of the wrong kind (an older build, a hand edit) falls back to the default
+  const pick = <K extends keyof PropSnapSettings>(key: K): PropSnapSettings[K] =>
+    typeof saved[key] === typeof DEFAULT_SETTINGS[key] ? (saved[key] as PropSnapSettings[K]) : DEFAULT_SETTINGS[key];
+  return { epcApiToken: pick('epcApiToken'), autoEnrich: pick('autoEnrich'), floorAreaFromText: pick('floorAreaFromText') };
 }
 
 /**

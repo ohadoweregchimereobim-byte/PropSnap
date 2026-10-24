@@ -59,7 +59,6 @@ const picked = new Set<string>();
 const planBtn = document.getElementById('planBtn') as HTMLButtonElement;
 // Pickers the user opened stay open when the table redraws after a choice
 const openPickers = new Set<string>();
-const rowKey = listingKey;
 let listings: PropertyListing[] = [];
 let userData: UserDataMap = {};
 
@@ -95,7 +94,7 @@ async function init() {
   document.getElementById('exportBtn')!.addEventListener('click', handleExport);
   planBtn.addEventListener('click', () => {
     // Ticked homes start a new plan; with none ticked, open the saved plan
-    const keys = listings.map(rowKey).filter((k) => picked.has(k));
+    const keys = listings.map(listingKey).filter((k) => picked.has(k));
     location.href = keys.length ? `./planner.html?${new URLSearchParams({ keys: keys.join(',') })}` : './planner.html';
   });
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
@@ -142,7 +141,7 @@ function render() {
   }
 
   // Forget ticks on homes that are gone
-  const known = new Set(listings.map(rowKey));
+  const known = new Set(listings.map(listingKey));
   for (const k of [...picked]) if (!known.has(k)) picked.delete(k);
   updatePlanButton();
 
@@ -200,11 +199,11 @@ function pickCell(l: PropertyListing): HTMLTableCellElement {
   const td = document.createElement('td');
   const box = document.createElement('input');
   box.type = 'checkbox';
-  box.checked = picked.has(rowKey(l));
+  box.checked = picked.has(listingKey(l));
   box.setAttribute('aria-label', `Pick ${l.fullAddress || l.displayAddress} for viewings`);
   box.addEventListener('change', () => {
-    if (box.checked) picked.add(rowKey(l));
-    else picked.delete(rowKey(l));
+    if (box.checked) picked.add(listingKey(l));
+    else picked.delete(listingKey(l));
     updatePlanButton();
   });
   td.append(box);
@@ -262,10 +261,10 @@ function candidatePicker(l: PropertyListing): HTMLDetailsElement {
   const candidates = l.addressCandidates ?? [];
   const details = document.createElement('details');
   details.className = 'picker';
-  details.open = openPickers.has(rowKey(l));
+  details.open = openPickers.has(listingKey(l));
   details.addEventListener('toggle', () => {
-    if (details.open) openPickers.add(rowKey(l));
-    else openPickers.delete(rowKey(l));
+    if (details.open) openPickers.add(listingKey(l));
+    else openPickers.delete(listingKey(l));
   });
 
   const summary = document.createElement('summary');
@@ -342,7 +341,7 @@ function stageCell(l: PropertyListing): HTMLTableCellElement {
   select.addEventListener('change', async () => {
     try {
       // Only the stage: notes typed on the listing page meanwhile are kept
-      await updatePipeline(rowKey(l), { status: select.value as PipelineStatus });
+      await updatePipeline(listingKey(l), { status: select.value as PipelineStatus });
     } catch (error: any) {
       setStatus(`Could not save the stage: ${error.message}`);
     }
@@ -376,7 +375,7 @@ function actionsCell(l: PropertyListing): HTMLTableCellElement {
 
   const details = document.createElement('a');
   details.className = 'btn btn-row';
-  details.href = `./listing.html?key=${encodeURIComponent(rowKey(l))}`;
+  details.href = `./listing.html?key=${encodeURIComponent(listingKey(l))}`;
   details.textContent = 'Details';
   details.title = 'Deal calculator for this listing';
   wrap.append(details);

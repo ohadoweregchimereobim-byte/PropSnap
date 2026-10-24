@@ -45,7 +45,6 @@ export interface ReportInput {
 
 const SOLD_ROWS = 20;
 
-const money = formatMoney;
 const pct = (n: number) => `${n.toFixed(2)}%`;
 const date = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const monthYear = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -59,7 +58,7 @@ function propertySection(l: PropertyListing): ReportSection {
     ? `${l.fullAddress}${l.addressConfidence === 'best_guess' ? ' (best guess from the EPC register)' : ''}`
     : null;
   const price = l.price
-    ? `${l.priceQualifier ? `${l.priceQualifier} ` : ''}${money(l.price)}${l.listingType === 'rent' ? ' a month' : ''}`
+    ? `${l.priceQualifier ? `${l.priceQualifier} ` : ''}${formatMoney(l.price)}${l.listingType === 'rent' ? ' a month' : ''}`
     : null;
   return {
     heading: 'Property',
@@ -74,7 +73,7 @@ function propertySection(l: PropertyListing): ReportSection {
       ['EPC rating', l.epcRating],
       ['Tenure', l.tenure],
       ['Furnished', l.furnished],
-      ['Deposit', l.deposit ? money(l.deposit) : null],
+      ['Deposit', l.deposit ? formatMoney(l.deposit) : null],
       ['Agent', [l.agentName, l.agentBranch].filter(Boolean).join(', ') || null],
       ['Agent phone', l.agentPhone],
       ['Listing', `${SITE_NAMES[l.source] ?? l.source}: ${l.url}`],
@@ -89,11 +88,11 @@ function priceSection(l: PropertyListing): ReportSection | null {
   const points = l.priceHistory ?? [];
   return {
     heading: 'Price history',
-    notes: [`${describeChange(change)} since ${date(change.first.seenAt)}, from ${money(change.first.price!)}.`],
+    notes: [`${describeChange(change)} since ${date(change.first.seenAt)}, from ${formatMoney(change.first.price!)}.`],
     table: {
       head: ['Seen', 'Price', ''],
       numeric: [1],
-      rows: points.map((p) => [date(p.seenAt), p.price ? money(p.price) : 'No price', p.qualifier ?? '']),
+      rows: points.map((p) => [date(p.seenAt), p.price ? formatMoney(p.price) : 'No price', p.qualifier ?? '']),
     },
   };
 }
@@ -104,7 +103,7 @@ function soldSection(sold: NonNullable<ReportInput['sold']>, l: PropertyListing)
   const notes = [sold.where, `Filters: ${sold.filters}.`];
   if (used > 0 && used < FEW_SALES) notes.push(`Only ${used} sale${used === 1 ? '' : 's'} in the figures, so this is weak evidence.`);
   if (view.thisHome.length) {
-    notes.push(`This home sold before: ${view.thisHome.map((s) => `${money(s.price)} in ${monthYear(s.date)}`).join('; ')}`
+    notes.push(`This home sold before: ${view.thisHome.map((s) => `${formatMoney(s.price)} in ${monthYear(s.date)}`).join('; ')}`
       + `${l.addressConfidence === 'best_guess' ? ' (based on the best-guess address)' : ''}.`);
   }
   if (view.comparables.length > SOLD_ROWS) notes.push(`The table shows the newest ${SOLD_ROWS} of ${view.comparables.length} sales; the figures use all of them.`);
@@ -114,8 +113,8 @@ function soldSection(sold: NonNullable<ReportInput['sold']>, l: PropertyListing)
   return {
     heading: 'Sold prices nearby',
     rows: compact([
-      ['Median sold price', view.median != null ? money(view.median) : '—'],
-      ['Lowest to highest', view.low != null ? (view.low === view.high ? money(view.low) : `${money(view.low)} to ${money(view.high!)}`) : '—'],
+      ['Median sold price', view.median != null ? formatMoney(view.median) : '—'],
+      ['Lowest to highest', view.low != null ? (view.low === view.high ? formatMoney(view.low) : `${formatMoney(view.low)} to ${formatMoney(view.high!)}`) : '—'],
       ['Sales', used === view.comparables.length ? String(used) : `${view.comparables.length} (${used} used in the figures)`],
       ['Asking price against the median', view.askingVsMedianPct != null ? `${view.askingVsMedianPct > 0 ? '+' : ''}${view.askingVsMedianPct.toFixed(1)}%` : null],
     ]),
@@ -127,7 +126,7 @@ function soldSection(sold: NonNullable<ReportInput['sold']>, l: PropertyListing)
           monthYear(s.date),
           `${saleAddress(s)}${s.postcode ? ` ${s.postcode}` : ''}`,
           TYPE_NAMES[s.propertyType],
-          `${money(s.price)}${s.standard ? '' : ' *'}`,
+          `${formatMoney(s.price)}${s.standard ? '' : ' *'}`,
         ]),
       }
       : undefined,
@@ -141,17 +140,17 @@ function dealSections({ inputs, btl, brr }: ReportInput['deal']): ReportSection[
   const sections: ReportSection[] = [{
     heading: 'Purchase and buy-to-let',
     rows: compact([
-      ['Price used', money(inputs.price)],
-      [btl.tax.name, `${money(btl.tax.total)}${btl.tax.note ? ` (${btl.tax.note})` : ''}`],
-      ['Legal fees and survey', money(inputs.buyingCosts)],
-      ['Mortgage', `${money(btl.loan)}: ${mortgage}`],
-      ['Mortgage payment', `${money(btl.mortgageMonthly)} a month`],
-      ['Rent', inputs.rentMonthly > 0 ? `${money(inputs.rentMonthly)} a month` : 'Not entered'],
-      ['Running costs', inputs.rentMonthly > 0 ? `${money(btl.runningCostsMonthly)} a month (agent ${inputs.managementPct}%, repairs and empty months ${inputs.maintenancePct}%, other ${money(inputs.otherMonthly)})` : null],
+      ['Price used', formatMoney(inputs.price)],
+      [btl.tax.name, `${formatMoney(btl.tax.total)}${btl.tax.note ? ` (${btl.tax.note})` : ''}`],
+      ['Legal fees and survey', formatMoney(inputs.buyingCosts)],
+      ['Mortgage', `${formatMoney(btl.loan)}: ${mortgage}`],
+      ['Mortgage payment', `${formatMoney(btl.mortgageMonthly)} a month`],
+      ['Rent', inputs.rentMonthly > 0 ? `${formatMoney(inputs.rentMonthly)} a month` : 'Not entered'],
+      ['Running costs', inputs.rentMonthly > 0 ? `${formatMoney(btl.runningCostsMonthly)} a month (agent ${inputs.managementPct}%, repairs and empty months ${inputs.maintenancePct}%, other ${formatMoney(inputs.otherMonthly)})` : null],
       ['Gross yield', inputs.rentMonthly > 0 ? pct(btl.grossYieldPct) : null],
       ['Net yield (before mortgage)', inputs.rentMonthly > 0 ? pct(btl.netYieldPct) : null],
-      ['Cashflow', inputs.rentMonthly > 0 ? `${money(btl.cashflowMonthly)} a month` : null],
-      ['Cash put in', money(btl.cashInvested)],
+      ['Cashflow', inputs.rentMonthly > 0 ? `${formatMoney(btl.cashflowMonthly)} a month` : null],
+      ['Cash put in', formatMoney(btl.cashInvested)],
       ['Return on cash', inputs.rentMonthly > 0 && btl.returnOnCashPct != null ? pct(btl.returnOnCashPct) : null],
     ]),
   }];
@@ -161,13 +160,13 @@ function dealSections({ inputs, btl, brr }: ReportInput['deal']): ReportSection[
     sections.push({
       heading: 'Buy, refurbish, refinance',
       rows: compact([
-        ['Refurbishment', money(inputs.refurbCost)],
-        ['Value after the works', money(inputs.valueAfterRefurb || inputs.price)],
-        ['Cash put in', money(brr.cashIn)],
-        ['New mortgage', `${money(brr.refinanceLoan)} (${inputs.refinanceLtvPct}% of the new value)`],
-        ['Cash taken back out', money(brr.cashReleased)],
-        ['Money left in the deal', brr.moneyLeftIn <= 0 ? 'None' : money(brr.moneyLeftIn)],
-        ['Cashflow', inputs.rentMonthly > 0 ? `${money(brr.cashflowMonthly)} a month` : null],
+        ['Refurbishment', formatMoney(inputs.refurbCost)],
+        ['Value after the works', formatMoney(inputs.valueAfterRefurb || inputs.price)],
+        ['Cash put in', formatMoney(brr.cashIn)],
+        ['New mortgage', `${formatMoney(brr.refinanceLoan)} (${inputs.refinanceLtvPct}% of the new value)`],
+        ['Cash taken back out', formatMoney(brr.cashReleased)],
+        ['Money left in the deal', brr.moneyLeftIn <= 0 ? 'None' : formatMoney(brr.moneyLeftIn)],
+        ['Cashflow', inputs.rentMonthly > 0 ? `${formatMoney(brr.cashflowMonthly)} a month` : null],
         ['Return on money left in', inputs.rentMonthly > 0 && brr.returnOnMoneyLeftPct != null ? pct(brr.returnOnMoneyLeftPct) : null],
       ]),
     });
@@ -198,7 +197,7 @@ export function buildReport(input: ReportInput): Report {
   const facts = [
     l.bedrooms != null ? `${l.bedrooms} bed` : null,
     l.propertyType,
-    l.price ? `${money(l.price)}${l.listingType === 'rent' ? ' a month' : ''}` : null,
+    l.price ? `${formatMoney(l.price)}${l.listingType === 'rent' ? ' a month' : ''}` : null,
   ].filter(Boolean).join(' · ');
 
   return {

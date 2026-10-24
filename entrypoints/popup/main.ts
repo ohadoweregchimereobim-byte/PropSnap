@@ -13,7 +13,7 @@ import { downloadCsv } from '../../src/services/csv-download';
 import { latestMove } from '../../src/services/price-history';
 import { getListings, getSettings, saveSettings } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
-import { getAdapterForUrl } from '../../src/adapters';
+import { listingSiteForUrl } from '../../src/adapters/listing-urls';
 import type { PropertyListing } from '../../src/adapters/types';
 
 // DOM elements
@@ -77,10 +77,10 @@ async function checkCurrentTab() {
   }
 
   // The same check the page's content script makes, so the two always agree
-  const adapter = getAdapterForUrl(tab.url);
+  const site = listingSiteForUrl(tab.url);
 
-  if (adapter) {
-    setStatus(`${SITE_NAMES[adapter.site]} listing detected — ready to capture`, 'ready');
+  if (site) {
+    setStatus(`${SITE_NAMES[site]} listing detected — ready to capture`, 'ready');
     captureBtn.disabled = false;
   } else {
     setStatus('Navigate to a Rightmove, Zoopla, or OpenRent listing', '');

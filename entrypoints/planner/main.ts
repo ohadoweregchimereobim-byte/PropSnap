@@ -89,7 +89,9 @@ async function init() {
     await loadListings();
     // Homes deleted elsewhere leave the plan, with their times
     const before = plan.keys.length;
-    plan = cleanPlan(plan, new Set(byKey.keys()), localDate(new Date()));
+    const cleaned = cleanPlan(plan, new Set(byKey.keys()), localDate(new Date()));
+    plan.keys = cleaned.keys;
+    plan.times = cleaned.times;
     if (plan.keys.length !== before) save();
     render();
   });

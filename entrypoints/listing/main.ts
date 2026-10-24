@@ -167,7 +167,7 @@ function showHeader() {
 
   $('facts').textContent = [
     SITE_NAMES[listing.source] ?? listing.source,
-    listing.price ? money(listing.price) + (listing.listingType === 'rent' ? ' a month' : '') : null,
+    listing.price ? formatMoney(listing.price) + (listing.listingType === 'rent' ? ' a month' : '') : null,
     listing.priceQualifier,
     listing.bedrooms != null ? `${listing.bedrooms} bed` : null,
     listing.propertyType,
@@ -275,7 +275,7 @@ function showPriceHistory(l: PropertyListing) {
 
   const line = $('priceChangeLine');
   line.className = `price-change price-${change.direction}`;
-  line.textContent = `${describeChange(change)} since ${shortDate(change.first.seenAt)}, from ${money(change.first.price!)}`;
+  line.textContent = `${describeChange(change)} since ${shortDate(change.first.seenAt)}, from ${formatMoney(change.first.price!)}`;
 
   const suffix = l.listingType === 'rent' ? ' a month' : '';
   const points = l.priceHistory ?? [];
@@ -285,9 +285,9 @@ function showPriceHistory(l: PropertyListing) {
     const step = p.price && before?.price ? p.price - before.price : 0;
     const cells = [
       shortDate(p.seenAt),
-      p.price ? `${money(p.price)}${suffix}` : 'No price',
+      p.price ? `${formatMoney(p.price)}${suffix}` : 'No price',
       p.qualifier ?? '',
-      step ? `${step > 0 ? '+' : '−'}${money(Math.abs(step))}` : '',
+      step ? `${step > 0 ? '+' : '−'}${formatMoney(Math.abs(step))}` : '',
     ];
     cells.forEach((text, n) => {
       const td = document.createElement('td');
@@ -360,17 +360,17 @@ function calculate() {
   const btl = buyToLet(inputs);
   const tax = btl.tax;
   $('taxName').textContent = tax.name;
-  $('taxTotal').textContent = money(tax.total);
+  $('taxTotal').textContent = formatMoney(tax.total);
   $('taxSlices').replaceChildren(...tax.slices.map((s) => {
     const tr = document.createElement('tr');
     const band = document.createElement('td');
-    band.textContent = `${money(s.from)} to ${money(s.to)}`;
+    band.textContent = `${formatMoney(s.from)} to ${formatMoney(s.to)}`;
     const rate = document.createElement('td');
     rate.className = 'num';
     rate.textContent = `${s.rate}%`;
     const amount = document.createElement('td');
     amount.className = 'num';
-    amount.textContent = money(s.tax);
+    amount.textContent = formatMoney(s.tax);
     tr.append(band, rate, amount);
     return tr;
   }));
@@ -381,24 +381,24 @@ function calculate() {
   rows($('btlRows'), [
     ['Gross yield', pct(btl.grossYieldPct)],
     ['Net yield (before mortgage)', pct(btl.netYieldPct)],
-    ['Deposit', money(btl.deposit)],
-    ['Mortgage', money(btl.loan)],
-    ['Mortgage payment', `${money(btl.mortgageMonthly)} a month`],
-    ['Running costs', `${money(btl.runningCostsMonthly)} a month`],
-    ['Cashflow', `${money(btl.cashflowMonthly)} a month`, btl.cashflowMonthly < 0],
-    ['Cash you put in', money(btl.cashInvested), false, 'Deposit, tax, legal fees and survey'],
+    ['Deposit', formatMoney(btl.deposit)],
+    ['Mortgage', formatMoney(btl.loan)],
+    ['Mortgage payment', `${formatMoney(btl.mortgageMonthly)} a month`],
+    ['Running costs', `${formatMoney(btl.runningCostsMonthly)} a month`],
+    ['Cashflow', `${formatMoney(btl.cashflowMonthly)} a month`, btl.cashflowMonthly < 0],
+    ['Cash you put in', formatMoney(btl.cashInvested), false, 'Deposit, tax, legal fees and survey'],
     ['Return on your cash', btl.returnOnCashPct == null ? '—' : pct(btl.returnOnCashPct), (btl.returnOnCashPct ?? 0) < 0],
   ]);
 
   // No value after the works typed yet: take the purchase price
   const deal = brr({ ...inputs, valueAfterRefurb: inputs.valueAfterRefurb || inputs.price });
   rows($('brrRows'), [
-    ['Cash you put in', money(deal.cashIn), false, 'Deposit, tax, legal fees, survey and the works'],
-    ['New mortgage', money(deal.refinanceLoan)],
-    ['Cash you take back out', money(deal.cashReleased), deal.cashReleased < 0, 'New mortgage minus the first mortgage'],
-    ['Money left in the deal', deal.moneyLeftIn <= 0 ? `None (${money(-deal.moneyLeftIn)} more out than in)` : money(deal.moneyLeftIn)],
-    ['Mortgage payment', `${money(deal.mortgageMonthly)} a month`],
-    ['Cashflow', `${money(deal.cashflowMonthly)} a month`, deal.cashflowMonthly < 0],
+    ['Cash you put in', formatMoney(deal.cashIn), false, 'Deposit, tax, legal fees, survey and the works'],
+    ['New mortgage', formatMoney(deal.refinanceLoan)],
+    ['Cash you take back out', formatMoney(deal.cashReleased), deal.cashReleased < 0, 'New mortgage minus the first mortgage'],
+    ['Money left in the deal', deal.moneyLeftIn <= 0 ? `None (${formatMoney(-deal.moneyLeftIn)} more out than in)` : formatMoney(deal.moneyLeftIn)],
+    ['Mortgage payment', `${formatMoney(deal.mortgageMonthly)} a month`],
+    ['Cashflow', `${formatMoney(deal.cashflowMonthly)} a month`, deal.cashflowMonthly < 0],
     ['Return on money left in', deal.returnOnMoneyLeftPct == null ? 'No money left in' : pct(deal.returnOnMoneyLeftPct), (deal.returnOnMoneyLeftPct ?? 0) < 0],
   ]);
 }
@@ -543,8 +543,8 @@ function renderSold() {
   $('soldStatus').hidden = true;
   $('soldBody').hidden = false;
 
-  $('soldMedian').textContent = view.median == null ? '—' : money(view.median);
-  $('soldRange').textContent = view.low == null ? '—' : view.low === view.high ? money(view.low) : `${money(view.low)} to ${money(view.high!)}`;
+  $('soldMedian').textContent = view.median == null ? '—' : formatMoney(view.median);
+  $('soldRange').textContent = view.low == null ? '—' : view.low === view.high ? formatMoney(view.low) : `${formatMoney(view.low)} to ${formatMoney(view.high!)}`;
   $('soldCount').textContent = String(view.comparables.length);
   const used = view.comparables.filter((s) => s.standard).length;
   $('soldCountLabel').textContent = used === view.comparables.length ? 'Sales' : `Sales (${used} used in the figures)`;
@@ -566,7 +566,7 @@ function renderSold() {
   $('thisHome').hidden = view.thisHome.length === 0;
   $('thisHomeList').replaceChildren(...view.thisHome.map((s) => {
     const li = document.createElement('li');
-    li.textContent = `${money(s.price)} in ${monthYear(s.date)}${s.standard ? '' : ' (not a standard sale)'}`;
+    li.textContent = `${formatMoney(s.price)} in ${monthYear(s.date)}${s.standard ? '' : ' (not a standard sale)'}`;
     return li;
   }));
   $('thisHomeNote').hidden = listing.addressConfidence !== 'best_guess';
@@ -594,7 +594,7 @@ function soldRow(s: SoldPrice, postcode: string | null): HTMLTableRowElement {
     [`${saleAddress(s)}${s.postcode ? ` ${s.postcode}` : ''}`, ''],
     [TYPE_NAMES[s.propertyType], ''],
     [s.tenure ? s.tenure.charAt(0).toUpperCase() + s.tenure.slice(1) : '—', ''],
-    [money(s.price), 'num nowrap'],
+    [formatMoney(s.price), 'num nowrap'],
   ] as const;
   for (const [value, className] of cells) {
     const td = document.createElement('td');
@@ -647,7 +647,6 @@ function rows(list: HTMLElement, items: Row[]) {
   }));
 }
 
-const money = formatMoney;
 
 function pct(value: number): string {
   return `${value.toFixed(2)}%`;

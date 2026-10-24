@@ -6,11 +6,12 @@ import type { PropertyListing } from '../adapters/types';
  */
 
 // One formatter for the whole page; making one per number is slow
-const MONEY = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+// signDisplay 'negative': a value that rounds to nothing shows "£0", not "-£0"
+const MONEY = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0, signDisplay: 'negative' });
 
 /** 295000 → "£295,000" */
 export function formatMoney(value: number): string {
-  return MONEY.format(Math.round(value));
+  return MONEY.format(value);
 }
 
 export const SITE_NAMES: Record<PropertyListing['source'], string> = {

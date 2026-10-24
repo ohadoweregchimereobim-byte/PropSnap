@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { LISTING_URLS } from './listing-urls';
 import { findEpcBandInText } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
@@ -21,9 +22,7 @@ import { findUnitNumberInText } from './unit-number';
 export class RightmoveAdapter implements SiteAdapter {
   site = 'rightmove' as const;
 
-  matchPatterns = [
-    /^https:\/\/www\.rightmove\.co\.uk\/properties\/\d+/,
-  ];
+  matchPatterns = LISTING_URLS.rightmove;
 
   canHandle(url: string): boolean {
     return this.matchPatterns.some((p) => p.test(url));
