@@ -33,15 +33,35 @@ export function keepUserChoice(previous: PropertyListing | undefined, next: Prop
   if (normalisePostcode(previous.postcode) !== normalisePostcode(next.postcode)) return next;
   if (next.addressConfidence === 'exact') return next;
 
+  // A new search's close homes are newer than the ones kept
+  return { ...withAddressOf(previous, next), addressCandidates: next.addressCandidates ?? previous.addressCandidates ?? null };
+}
+
+/** `next` with the home found for `previous`: its address, close homes, certificate and energy figures */
+function withAddressOf(previous: PropertyListing, next: PropertyListing): PropertyListing {
   return {
     ...next,
     fullAddress: previous.fullAddress,
-    addressConfidence: 'user_choice',
-    addressCandidates: next.addressCandidates ?? previous.addressCandidates,
-    enrichmentDetail: previous.enrichmentDetail,
+    addressConfidence: previous.addressConfidence,
+    addressCandidates: previous.addressCandidates ?? null,
+    enrichmentDetail: previous.enrichmentDetail ?? null,
     epcCertificateNumber: previous.epcCertificateNumber ?? null,
     epcEnergy: previous.epcEnergy ?? null,
+    // The listing's own rating wins; an exact match may have lent the certificate's
+    epcRating: next.epcRating || (previous.addressConfidence === 'exact' ? previous.epcRating : null),
   };
+}
+
+/**
+ * A new capture that got no answer from the EPC register (the lookup was
+ * off, had no token, or failed) keeps the home found before, as long as the
+ * postcode is the same. Without this, checking the price again would wipe it.
+ */
+export function keepKnownAddress(previous: PropertyListing | undefined, next: PropertyListing): PropertyListing {
+  if (!previous?.fullAddress || next.fullAddress) return next;
+  if (!previous.postcode || !next.postcode) return next;
+  if (normalisePostcode(previous.postcode) !== normalisePostcode(next.postcode)) return next;
+  return withAddressOf(previous, next);
 }
 
 /** What the EPC match is worked out from; when any of it changes, match again */
@@ -67,18 +87,7 @@ export function reuseKnownAddress(previous: PropertyListing | undefined, next: P
   if (previous.addressConfidence !== 'exact' && previous.addressConfidence !== 'user_choice') return null;
   if (!previous.postcode || !next.postcode) return null;
   if (matchEvidence(previous) !== matchEvidence(next)) return null;
-
-  return {
-    ...next,
-    fullAddress: previous.fullAddress,
-    addressConfidence: previous.addressConfidence,
-    addressCandidates: previous.addressCandidates ?? null,
-    enrichmentDetail: previous.enrichmentDetail ?? null,
-    epcCertificateNumber: previous.epcCertificateNumber ?? null,
-    epcEnergy: previous.epcEnergy ?? null,
-    // The listing's own rating wins; an exact match may have lent the certificate's
-    epcRating: next.epcRating || (previous.addressConfidence === 'exact' ? previous.epcRating : null),
-  };
+  return withAddressOf(previous, next);
 }
 
 /** A Google Maps search for the address, so the user can check it on Street View */

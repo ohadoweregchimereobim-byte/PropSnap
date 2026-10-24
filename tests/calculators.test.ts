@@ -55,12 +55,17 @@ describe('taxRegionFromPostcode', () => {
     expect(taxRegionFromPostcode('SY23 1AA')).toEqual({ region: 'wales', sure: true });
     expect(taxRegionFromPostcode('CH7 1AA')).toEqual({ region: 'wales', sure: true });
     expect(taxRegionFromPostcode('BH25 6HB')).toEqual({ region: 'england', sure: true });
-    expect(taxRegionFromPostcode('CH1 1AA')).toEqual({ region: 'england', sure: true });
+    expect(taxRegionFromPostcode('CH2 1AA')).toEqual({ region: 'england', sure: true });
   });
 
   it('is not sure for border districts or a missing postcode', () => {
     expect(taxRegionFromPostcode('HR2 7AA').sure).toBe(false);
     expect(taxRegionFromPostcode('SY10 7AA').sure).toBe(false);
+    // Districts with homes in both countries: Sedbury (NP16) and Chirbury (SY15) are in England
+    expect(taxRegionFromPostcode('NP16 7AA')).toEqual({ region: 'wales', sure: false });
+    expect(taxRegionFromPostcode('SY15 6AA')).toEqual({ region: 'wales', sure: false });
+    expect(taxRegionFromPostcode('CH1 6AA')).toEqual({ region: 'england', sure: false });
+    expect(taxRegionFromPostcode('LD8 2AA').sure).toBe(false);
     expect(taxRegionFromPostcode(null).sure).toBe(false);
   });
 });
@@ -70,6 +75,11 @@ describe('monthlyMortgage', () => {
     expect(monthlyMortgage(200_000, 5, 25, 'repayment')).toBeCloseTo(1_169.18, 2);
     expect(monthlyMortgage(200_000, 5, 25, 'interest_only')).toBeCloseTo(833.33, 2);
     expect(monthlyMortgage(0, 5, 25, 'repayment')).toBe(0);
+  });
+
+  it('uses the usual 25 years while the term box is empty, never £∞', () => {
+    expect(monthlyMortgage(200_000, 5, 0, 'repayment')).toBeCloseTo(1_169.18, 2);
+    expect(monthlyMortgage(200_000, 0, 0, 'repayment')).toBeCloseTo(666.67, 2);
   });
 });
 

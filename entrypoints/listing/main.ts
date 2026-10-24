@@ -6,7 +6,7 @@
  * from the listing's own figures are kept, so a new price still flows in.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { getListings, LISTINGS_KEY, setAreaSummary } from '../../src/services/storage';
+import { getListings, LISTINGS_KEY, samePlace, setAreaSummary } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import {
   addActivity,
@@ -54,17 +54,17 @@ import {
   flip,
   hmo,
   RATES_YEAR,
-  taxRegionFromPostcode,
   type CustomCost,
   type DealInputs,
 } from '../../src/services/calculators';
 import { BRANDING_KEY, cleanBranding, getBranding, logoProblem, saveBranding, type Branding } from '../../src/services/branding';
 import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
-import { fetchAreaChecksCached, findAreaPoint, FLOOD_WORDS, rightsNames, summariseArea, type AreaChecks } from '../../src/services/area-checks';
+import { areaCountries, fetchAreaChecksCached, findAreaPoint, FLOOD_WORDS, rightsNames, summariseArea, type AreaChecks } from '../../src/services/area-checks';
 import { daysOnMarket, describeChange, describePortalChanges, portalChanges, priceChange } from '../../src/services/price-history';
 import { buildReport, defaultStrategies, type Report, type Strategies } from '../../src/services/report';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES, type Flip } from '../../src/services/sold-prices';
 import { bandForScore, energyGap, lowWithPotential, type Band } from '../../src/services/epc-energy';
+import { epcBand } from '../../src/adapters/epc-band';
 
 const $ = (id: string) => document.getElementById(id)!;
 const form = $('dealForm') as HTMLFormElement;
@@ -97,6 +97,8 @@ let sales: SoldPrice[] | null = null;
 let soldRequest = 0;
 // "Sales in CF24 2QH and on …", for the page and the report
 let soldWhereText = '';
+/** The searches that did not answer, as "in CF24 3AB" / "on Tweedsmuir Road" */
+let soldMissing: string[] = [];
 // Most rows the sold-price table shows
 const SOLD_ROWS = 50;
 
@@ -539,8 +541,9 @@ function showEnergy(l: PropertyListing) {
   const notes: string[] = [];
   if (energy.registrationDate) notes.push(`Certificate from ${shortDate(energy.registrationDate)}; works since then are not in it.`);
   if (l.addressConfidence === 'best_guess') notes.push('This is the certificate of the best-guess home. Check the address on the dashboard.');
-  if (l.epcRating && energy.currentBand && l.epcRating.toUpperCase() !== energy.currentBand) {
-    notes.push(`The listing says EPC ${l.epcRating.toUpperCase()}; this certificate says ${energy.currentBand}. The listing may use a newer certificate.`);
+  const listed = epcBand(l.epcRating);
+  if (listed && energy.currentBand && listed !== energy.currentBand) {
+    notes.push(`The listing says EPC ${listed}; this certificate says ${energy.currentBand}. The listing may use a newer certificate.`);
   }
   $('energyNote').textContent = notes.join(' ');
 
@@ -926,10 +929,9 @@ let areaRequest = 0;
 let areaShown: AreaChecks | null = null;
 let areaRightsNames: Record<string, string> = {};
 
-/** Wales by the postcode; a border postcode counts as not sure */
+/** Wales by the postcode (a border postcode is not): only the Welsh maps are asked, and Wales has no Article 4 map */
 function isWales(l: PropertyListing): boolean {
-  const { region, sure } = taxRegionFromPostcode(l.postcode || l.postcodePartial);
-  return region === 'wales' && sure;
+  return !areaCountries(l).includes('england');
 }
 
 async function loadArea(fresh = false) {
@@ -950,18 +952,25 @@ async function loadArea(fresh = false) {
   $('areaWhere').textContent = point.source === 'listing'
     ? `Checked at the map position ${SITE_NAMES[l.source]} gives for this home.`
     : `Checked at the centre of the postcode ${l.postcode}, as the listing has no map position. A boundary can run through a postcode.`;
-  showStatus('Asking the Environment Agency, Natural Resources Wales, the planning data service and the police…');
+  // Each country's maps cover only that country, so the home's own are asked (both near the border)
+  const countries = areaCountries(l);
+  const asking = countries.length > 1 ? 'the Environment Agency, Natural Resources Wales, the planning data service'
+    : countries[0] === 'wales' ? 'Natural Resources Wales, DataMapWales' : 'the Environment Agency, the planning data service';
+  showStatus(`Asking ${asking} and the police…`);
 
   try {
-    const [checks, names] = await Promise.all([fetchAreaChecksCached(point, { fresh }), rightsNames()]);
+    const [checks, names] = await Promise.all([fetchAreaChecksCached(point, { fresh, countries }), rightsNames()]);
     if (request !== areaRequest) return;
     areaShown = checks;
     areaRightsNames = names;
     $('areaStatus').hidden = checks.failed.length === 0;
     $('areaStatus').textContent = checks.failed.length ? `Could not check ${checks.failed.join(', ')} just now. Click Check again to try again.` : '';
     renderArea(checks, names, l);
-    // Keep the short version for the dashboard and CSV
-    setAreaSummary(l.source, l.listingId, summariseArea(checks, { wales: isWales(l) })).catch(() => {});
+    // Keep the short version for the dashboard and CSV; a check that failed today keeps its last result.
+    // Not when the listing was captured again somewhere else while this page was open
+    setAreaSummary(l.source, l.listingId, (previous, saved) => (
+      samePlace(saved, l) ? summariseArea(checks, { wales: isWales(l), previous }) : null
+    )).catch(() => {});
   } catch (error: any) {
     if (request !== areaRequest) return;
     showStatus(`Could not check the area: ${error.message}. Click Check again to try again.`);
@@ -1034,6 +1043,7 @@ async function loadSold(fresh = false) {
   const request = ++soldRequest;
   const area = soldPriceArea(listing);
   sales = null;
+  soldMissing = [];
 
   const where = [
     area.postcode ? `in ${area.postcode}` : null,
@@ -1052,6 +1062,10 @@ async function loadSold(fresh = false) {
     const found = await fetchSoldPricesCached(area, { fresh });
     if (request !== soldRequest) return;
     sales = found.sales;
+    // One search failed: the figures are only part of the picture (the report says so too)
+    soldMissing = found.failed.map((search) => (search === 'postcode' ? `in ${area.postcode}` : `on ${titleCase(area.street ?? '')}`));
+    if (soldMissing.length) soldWhereText += ` Sales ${soldMissing.join(' and ')} could not be fetched just now, so these are only part of the picture.`;
+    $('soldWhere').textContent = soldMissing.length ? `${soldWhereText} Click Refresh to try again.` : soldWhereText;
     // Say when a kept answer is shown, so the user knows Refresh asks again
     const minutes = Math.floor((Date.now() - found.at) / 60_000);
     if (minutes >= 1) {
@@ -1173,7 +1187,9 @@ function showSoldStatus(message: string) {
 function renderSold() {
   if (!listing || !sales) return;
   if (sales.length === 0) {
-    showSoldStatus('HM Land Registry has no sales here. New streets, and homes not sold since 1995, have none.');
+    showSoldStatus(soldMissing.length
+      ? `Sales ${soldMissing.join(' and ')} could not be fetched just now, and the other search found none. Click Refresh to try again.`
+      : 'HM Land Registry has no sales here. New streets, and homes not sold since 1995, have none.');
     return;
   }
 

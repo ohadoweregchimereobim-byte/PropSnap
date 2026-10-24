@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { chooseAddress, clearListings, deleteListing, getListings, saveListing } from '../src/services/storage';
+import { chooseAddress, clearListings, deleteListing, getListings, samePlace, saveListing, setAreaSummary } from '../src/services/storage';
 import { addActivity, getAgentNotes, getAllUserData, getUserData, logCall, logLetters, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
 import { newActivity } from '../src/services/crm';
 
@@ -89,6 +89,23 @@ describe('saving listings', () => {
     expect(saved!.addressConfidence).toBe('user_choice');
   });
 
+  it('keeps the home found before when a new capture gets no answer from the EPC register', async () => {
+    const energy = { certificateNumber: 'c1', currentBand: 'E' as const, potentialBand: 'C' as const, currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] };
+    await saveListing(listing('1', { fullAddress: candidates[0]!.fullAddress, addressConfidence: 'exact', epcCertificateNumber: 'c1', epcEnergy: energy }));
+    // EPC lookup off, no token, or the register failed: the address stays, the new price comes in
+    await saveListing(listing('1', { price: 290_000, capturedAt: '2026-10-12T10:00:00Z' }), { keepAddress: true });
+
+    const [saved] = await getListings();
+    expect(saved).toMatchObject({ fullAddress: '1 Tweedsmuir Road, Cardiff', addressConfidence: 'exact', epcCertificateNumber: 'c1', price: 290_000 });
+    expect(saved!.epcEnergy?.potentialBand).toBe('C');
+  });
+
+  it('lets a capture the register answered replace the home found before', async () => {
+    await saveListing(listing('1', { fullAddress: candidates[0]!.fullAddress, addressConfidence: 'exact' }));
+    await saveListing(listing('1', { capturedAt: '2026-10-12T10:00:00Z' }));
+    expect((await getListings())[0]!.fullAddress).toBeNull();
+  });
+
   it('loses neither of two captures saved at the same moment', async () => {
     await Promise.all([saveListing(listing('1')), saveListing(listing('2')), saveListing(listing('3'))]);
     expect((await getListings()).map((l) => l.listingId).sort()).toEqual(['1', '2', '3']);
@@ -112,6 +129,21 @@ describe('saving listings', () => {
     await deleteListing('rightmove', '1');
     expect((await getListings()).map((l) => l.listingId)).toEqual(['2']);
     expect(Object.keys(await getAllUserData())).toEqual(['rightmove:2']);
+  });
+
+  it('keeps an area summary only for the place it was checked at', async () => {
+    const opened = listing('1', { latitude: 51.4983, longitude: -3.1621 });
+    await saveListing(opened);
+    const summary = { checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none' as const, conservation: '', article4Count: 0, hmoArticle4: false, crimeTotal: 12, crimeMonth: '2026-08' };
+    const save = () => setAreaSummary('rightmove', '1', (_previous, saved) => (samePlace(saved, opened) ? summary : null));
+
+    await save();
+    expect((await getListings())[0]!.area).toEqual(summary);
+    // Captured again with a corrected pin while the page was open: the old check is not saved on it
+    await saveListing(listing('1', { latitude: 51.5, longitude: -3.17 }));
+    expect((await getListings())[0]!.area).toBeUndefined();
+    await save();
+    expect((await getListings())[0]!.area).toBeUndefined();
   });
 
   it('clears everything', async () => {

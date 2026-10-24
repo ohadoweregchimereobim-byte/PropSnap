@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AddressCandidate, PropertyListing } from '../src/adapters/types';
-import { chooseCandidate, keepUserChoice, mapsLink, reuseKnownAddress } from '../src/services/address-choice';
+import { chooseCandidate, keepKnownAddress, keepUserChoice, mapsLink, reuseKnownAddress } from '../src/services/address-choice';
 
 const candidate = (n: number): AddressCandidate => ({
   fullAddress: `${n} Lyric Way, Thornhill, CARDIFF`,
@@ -142,6 +142,27 @@ describe('reuseKnownAddress', () => {
     expect(reuseKnownAddress(exact, fresh({ bedrooms: 3 }))).toBeNull();
     expect(reuseKnownAddress(exact, fresh({ propertyType: 'semi-detached' }))).toBeNull();
     expect(reuseKnownAddress(exact, fresh({ numberFromText: '12' }))).toBeNull();
+  });
+});
+
+describe('keepKnownAddress', () => {
+  // A capture the EPC register did not answer: no full address of its own
+  const unanswered = (extra: Partial<PropertyListing> = {}) =>
+    listing({ fullAddress: null, addressConfidence: null, addressCandidates: null, enrichmentDetail: 'EPC API: HTTP 503', epcRating: null, ...extra });
+  const exact = listing({ addressConfidence: 'exact', addressCandidates: null, enrichmentDetail: 'Exact: matched on house number', epcRating: 'B', epcCertificateNumber: 'cert-50' });
+
+  it('keeps an exact match or a best guess, with its certificate', () => {
+    const kept = keepKnownAddress(exact, unanswered({ floorAreaSqm: 72 }));
+    expect(kept).toMatchObject({ fullAddress: '50 Lyric Way, Thornhill, CARDIFF', addressConfidence: 'exact', epcCertificateNumber: 'cert-50', epcRating: 'B', floorAreaSqm: 72 });
+    expect(kept.enrichmentDetail).toBe('Exact: matched on house number');
+    expect(keepKnownAddress(listing(), unanswered()).addressCandidates).toHaveLength(3);
+  });
+
+  it('lets a new address or a new postcode win', () => {
+    const found = unanswered({ fullAddress: '54 Lyric Way', addressConfidence: 'exact' });
+    expect(keepKnownAddress(exact, found)).toBe(found);
+    expect(keepKnownAddress(exact, unanswered({ postcode: 'CF14 9BQ' })).fullAddress).toBeNull();
+    expect(keepKnownAddress(undefined, unanswered()).fullAddress).toBeNull();
   });
 });
 

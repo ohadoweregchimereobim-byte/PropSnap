@@ -1,4 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
+import { taxRegionFromPostcode } from './calculators';
 import { readCache, writeCache } from './session-cache';
 
 /**
@@ -13,6 +14,10 @@ import { readCache, writeCache } from './session-cache';
  * point). Wales: Natural Resources Wales Flood Map for Planning and the
  * Welsh conservation area boundaries on DataMapWales (the server checks the
  * point). Crime: data.police.uk, street crime within about a mile, latest month.
+ *
+ * Each country's maps cover only that country, so a home is checked against
+ * its own country's (both on a border postcode). A map that failed is never
+ * read as "nothing here".
  */
 
 export interface AreaPoint {
@@ -243,12 +248,32 @@ export function walesConservation(json: unknown): ConservationArea[] {
 
 // ── Putting the checks together ──────────────────────────────────────────
 
-/** Several sources answer for the same check (England and Wales): the highest zone wins */
+export type AreaCountry = 'england' | 'wales';
+
+/** The countries whose maps to ask: the home's own, or both on a border postcode (or with no postcode at all) */
+export function areaCountries(l: Pick<PropertyListing, 'postcode' | 'postcodePartial'>): AreaCountry[] {
+  const { region, sure } = taxRegionFromPostcode(l.postcode || l.postcodePartial);
+  return sure ? [region] : ['england', 'wales'];
+}
+
+/**
+ * Several sources answer for the same check (England and Wales; null = it
+ * failed): the highest zone wins. "None" stands only when every source
+ * answered, as the one that failed may cover the home.
+ */
 export function combineFlood(...checks: Array<FloodCheck | null>): FloodCheck | null {
   const done = checks.filter((c): c is FloodCheck => c !== null);
   if (done.length === 0) return null;
   const rank = { FZ3: 2, FZ2: 1, none: 0 } as const;
-  return done.reduce((best, c) => (rank[c.zone] > rank[best.zone] ? c : best));
+  const best = done.reduce((top, c) => (rank[c.zone] > rank[top.zone] ? c : top));
+  return best.zone === 'none' && done.length < checks.length ? null : best;
+}
+
+/** Conservation areas from several sources (null = it failed); none found stands only when every source answered */
+export function combineConservation(...lists: Array<ConservationArea[] | null>): ConservationArea[] | null {
+  const done = lists.filter((l): l is ConservationArea[] => l !== null);
+  const found = done.flat();
+  return found.length > 0 || (done.length > 0 && done.length === lists.length) ? found : null;
 }
 
 /** What the dashboard, CSV and report need, kept on the listing */
@@ -264,18 +289,22 @@ export interface AreaSummary {
 
 /**
  * The short version. In Wales there is no Article 4 map, so "none found"
- * there is unknown (null), never a clear "no HMO Article 4".
+ * there is unknown (null), never a clear "no HMO Article 4". A check that
+ * failed this time keeps its result from the `previous` summary, and then
+ * the summary keeps the earlier date too, so it never looks newer than it is.
  */
-export function summariseArea(a: AreaChecks, { wales }: { wales: boolean }): AreaSummary {
+export function summariseArea(a: AreaChecks, { wales, previous = null }: { wales: boolean; previous?: AreaSummary | null }): AreaSummary {
   const article4 = wales && a.article4?.length === 0 ? null : a.article4;
+  const before = cleanAreaSummary(previous);
+  const kept = before !== null && (!a.flood || !a.conservation || !a.article4 || !a.crime);
   return {
-    checkedAt: a.checkedAt,
-    floodZone: a.flood?.zone ?? null,
-    conservation: a.conservation ? (a.conservation.map((c) => c.name).join('; ') || '') : null,
-    article4Count: article4 ? article4.length : null,
-    hmoArticle4: article4 ? article4.some((d) => d.hmo) : null,
-    crimeTotal: a.crime?.total ?? null,
-    crimeMonth: a.crime?.month ?? null,
+    checkedAt: kept ? before.checkedAt : a.checkedAt,
+    floodZone: a.flood ? a.flood.zone : before?.floodZone ?? null,
+    conservation: a.conservation ? (a.conservation.map((c) => c.name).join('; ') || '') : before?.conservation ?? null,
+    article4Count: article4 ? article4.length : a.article4 ? null : before?.article4Count ?? null,
+    hmoArticle4: article4 ? article4.some((d) => d.hmo) : a.article4 ? null : before?.hmoArticle4 ?? null,
+    crimeTotal: a.crime ? a.crime.total : before?.crimeTotal ?? null,
+    crimeMonth: a.crime ? a.crime.month : before?.crimeMonth ?? null,
   };
 }
 
@@ -377,10 +406,17 @@ export async function rightsNames(): Promise<Record<string, string>> {
   }
 }
 
-/** Every check for a point; each one that fails is named in `failed` instead of stopping the rest */
-export async function fetchAreaChecks(point: AreaPoint): Promise<AreaChecks> {
+/**
+ * Every check for a point, against the maps of the countries given; each
+ * one that fails is named in `failed` instead of stopping the rest
+ */
+export async function fetchAreaChecks(point: AreaPoint, countries: AreaCountry[] = ['england', 'wales']): Promise<AreaChecks> {
   const failed: string[] = [];
-  const attempt = async <T>(what: string, run: () => Promise<T>): Promise<T | null> => {
+  const england = countries.includes('england');
+  const wales = countries.includes('wales');
+  // undefined: not asked (the home is not in that country); null: asked and failed
+  const attempt = async <T>(ask: boolean, what: string, run: () => Promise<T>): Promise<T | null | undefined> => {
+    if (!ask) return undefined;
     try {
       return await run();
     } catch {
@@ -388,38 +424,40 @@ export async function fetchAreaChecks(point: AreaPoint): Promise<AreaChecks> {
       return null;
     }
   };
+  const asked = <T>(...answers: Array<T | null | undefined>) => answers.filter((x): x is T | null => x !== undefined);
   const day = today();
   const [eaFloodCheck, walesFloodCheck, englandConservation, walesConservationAreas, article4, crimeSummary] = await Promise.all([
-    attempt('flood zones (England)', () => eaFlood(point)),
-    attempt('flood zones (Wales)', async () => walesFloodZone(await walesLayer('inspire-nrw:NRW_FLOODZONE_RIVERS_SEAS_MERGED', 'risk,pub_date', point))),
-    attempt('conservation areas (England)', async () => parseConservation(await planning('conservation-area', point), day)),
-    attempt('conservation areas (Wales)', async () => walesConservation(await walesLayer('geonode:conservation_areas_wales', 'localplann,sitename,designation_date', point))),
-    attempt('Article 4 directions', async () => parseArticle4(await planning('article-4-direction-area', point), day)),
-    attempt('street crime', () => crime(point)),
+    attempt(england, 'flood zones (England)', () => eaFlood(point)),
+    attempt(wales, 'flood zones (Wales)', async () => walesFloodZone(await walesLayer('inspire-nrw:NRW_FLOODZONE_RIVERS_SEAS_MERGED', 'risk,pub_date', point))),
+    attempt(england, 'conservation areas (England)', async () => parseConservation(await planning('conservation-area', point), day)),
+    attempt(wales, 'conservation areas (Wales)', async () => walesConservation(await walesLayer('geonode:conservation_areas_wales', 'localplann,sitename,designation_date', point))),
+    attempt(england, 'Article 4 directions', async () => parseArticle4(await planning('article-4-direction-area', point), day)),
+    attempt(true, 'street crime', () => crime(point)),
   ]);
 
-  const conservation = englandConservation === null && walesConservationAreas === null
-    ? null
-    : [...(englandConservation ?? []), ...(walesConservationAreas ?? [])];
   return {
     checkedAt: new Date().toISOString(),
     point,
-    flood: combineFlood(eaFloodCheck, walesFloodCheck),
-    conservation,
-    article4,
-    crime: crimeSummary,
+    flood: combineFlood(...asked(eaFloodCheck, walesFloodCheck)),
+    conservation: combineConservation(...asked(englandConservation, walesConservationAreas)),
+    // Wales has no Article 4 map to ask, which the page and summary say as such
+    article4: article4 === undefined ? [] : article4,
+    crime: crimeSummary ?? null,
     failed,
   };
 }
 
 /** The checks for this point, kept for a week; `fresh` asks again */
-export async function fetchAreaChecksCached(point: AreaPoint, { fresh = false }: { fresh?: boolean } = {}): Promise<AreaChecks> {
-  const key = `area:${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+export async function fetchAreaChecksCached(
+  point: AreaPoint,
+  { fresh = false, countries = ['england', 'wales'] }: { fresh?: boolean; countries?: AreaCountry[] } = {},
+): Promise<AreaChecks> {
+  const key = `area:${point.lat.toFixed(5)},${point.lng.toFixed(5)}:${[...countries].sort().join('+')}`;
   if (!fresh) {
     const kept = await readCache<AreaChecks>(key);
     if (kept) return kept.value;
   }
-  const checks = await fetchAreaChecks(point);
+  const checks = await fetchAreaChecks(point, countries);
   // A check that failed is asked again next time instead of being kept
   if (checks.failed.length === 0) await writeCache(key, checks, AREA_CACHE_MS);
   return checks;

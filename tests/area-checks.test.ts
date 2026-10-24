@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  areaCountries,
   cleanAreaSummary,
+  combineConservation,
   combineFlood,
+  fetchAreaChecks,
   eaFloodZoneAt,
   parseArticle4,
   parseConservation,
@@ -118,12 +121,35 @@ describe('Wales', () => {
 });
 
 describe('putting it together', () => {
-  it('takes the highest flood zone, and none only when a check ran', () => {
+  it('takes the highest flood zone, and none only when every check ran', () => {
     const none = { zone: 'none' as const, by: null, sourceOfFlooding: null };
     const fz2 = { zone: 'FZ2' as const, by: 'Environment Agency', sourceOfFlooding: 'river' };
     expect(combineFlood(none, fz2)).toBe(fz2);
-    expect(combineFlood(null, none)).toBe(none);
+    expect(combineFlood(none, none)).toBe(none);
+    expect(combineFlood(none)).toBe(none);
+    // The map that failed may be the one that covers the home
+    expect(combineFlood(null, none)).toBeNull();
+    expect(combineFlood(null, fz2)).toBe(fz2);
     expect(combineFlood(null, null)).toBeNull();
+  });
+
+  it('says none found for conservation areas only when every check ran', () => {
+    const area = { name: 'Cathedral Road', council: 'Cardiff', designated: null };
+    expect(combineConservation([], [])).toEqual([]);
+    expect(combineConservation([], [area])).toEqual([area]);
+    expect(combineConservation(null, [])).toBeNull();
+    expect(combineConservation(null, [area])).toEqual([area]);
+    expect(combineConservation(null)).toBeNull();
+  });
+
+  it('checks a home against its own country, and both on the border', () => {
+    expect(areaCountries({ postcode: 'CF24 2QH', postcodePartial: 'CF24' })).toEqual(['wales']);
+    expect(areaCountries({ postcode: 'SW1P 1LQ', postcodePartial: 'SW1P' })).toEqual(['england']);
+    expect(areaCountries({ postcode: null, postcodePartial: 'LL11' })).toEqual(['wales']);
+    expect(areaCountries({ postcode: 'SY10 7AB', postcodePartial: 'SY10' })).toEqual(['england', 'wales']);
+    // Sedbury (NP16 7) is in England though most of NP16 is Welsh
+    expect(areaCountries({ postcode: 'NP16 7AA', postcodePartial: 'NP16' })).toEqual(['england', 'wales']);
+    expect(areaCountries({ postcode: null, postcodePartial: null })).toEqual(['england', 'wales']);
   });
 
   it('keeps a short summary for the dashboard and checks it when read back', () => {
@@ -145,5 +171,71 @@ describe('putting it together', () => {
     expect(summariseArea({ ...checks, article4: null, flood: null, conservation: null, crime: null }, { wales: false })).toMatchObject({ floodZone: null, conservation: null, article4Count: null, hmoArticle4: null, crimeTotal: null });
     expect(cleanAreaSummary({ checkedAt: 'x', floodZone: 'FZ9', crimeMonth: 'soon' })).toMatchObject({ floodZone: null, crimeMonth: null });
     expect(cleanAreaSummary(null)).toBeNull();
+  });
+
+  it('keeps the last result of a check that failed this time', () => {
+    const previous = { checkedAt: '2026-10-17T12:00:00Z', floodZone: 'FZ2' as const, conservation: '', article4Count: 1, hmoArticle4: true, crimeTotal: 40, crimeMonth: '2026-07' };
+    const failedAll: AreaChecks = {
+      checkedAt: '2026-10-24T12:00:00Z', point: { lat: 51.5, lng: -0.1, source: 'listing' },
+      flood: null, conservation: null, article4: null, crime: null, failed: ['everything'],
+    };
+    // Nothing answered: the last summary stands as it was, date and all
+    expect(summariseArea(failedAll, { wales: false, previous })).toEqual(previous);
+    // What did answer replaces the old result; the date stays the older one, as not everything was checked again
+    const crimeOnly = { ...failedAll, crime: { month: '2026-08', total: 12, byCategory: [] } };
+    expect(summariseArea(crimeOnly, { wales: false, previous })).toEqual({ ...previous, crimeTotal: 12, crimeMonth: '2026-08' });
+    // Everything answered: today's date
+    const all = { ...failedAll, flood: { zone: 'none' as const, by: null, sourceOfFlooding: null }, conservation: [], article4: [], failed: [] };
+    expect(summariseArea({ ...all, crime: crimeOnly.crime }, { wales: false, previous })).toMatchObject({ checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none', article4Count: 0 });
+    // Wales has no Article 4 map: that is no answer, and nothing old is kept for it
+    const welsh = { ...previous, article4Count: 1, hmoArticle4: true };
+    expect(summariseArea({ ...crimeOnly, article4: [] }, { wales: true, previous: welsh })).toMatchObject({ article4Count: null, hmoArticle4: null, crimeTotal: 12 });
+    // ...so with nothing else answered there, the last summary stands too
+    expect(summariseArea({ ...failedAll, article4: [] }, { wales: true, previous: { ...previous, article4Count: null, hmoArticle4: null } }))
+      .toEqual({ ...previous, article4Count: null, hmoArticle4: null });
+  });
+});
+
+describe('asking the services', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Every service answers with nothing found, except the ones in `failing`
+  function services(failing: string[] = []) {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (failing.some((host) => url.includes(host))) return new Response('', { status: 503 });
+      if (url.includes('crime-last-updated')) return new Response(JSON.stringify({ date: '2026-08-01' }));
+      if (url.includes('crimes-street')) return new Response(JSON.stringify([]));
+      if (url.includes('planning.data.gov.uk')) return new Response(JSON.stringify({ entities: [] }));
+      return new Response(JSON.stringify({ features: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+  const point = { lat: 51.4983, lng: -0.1356, source: 'listing' as const };
+  const hosts = (mock: ReturnType<typeof services>) => mock.mock.calls.map(([url]) => new URL(String(url)).hostname);
+
+  it('asks only the home\'s own country', async () => {
+    const english = services();
+    await fetchAreaChecks(point, ['england']);
+    expect(hosts(english)).not.toContain('datamap.gov.wales');
+
+    const welsh = services();
+    const checks = await fetchAreaChecks(point, ['wales']);
+    expect(hosts(welsh)).not.toContain('environment.data.gov.uk');
+    expect(hosts(welsh)).not.toContain('www.planning.data.gov.uk');
+    // No Article 4 map in Wales: shown as such, not as a failed check
+    expect(checks.article4).toEqual([]);
+    expect(checks.failed).toEqual([]);
+  });
+
+  it('never reads a failed flood map as "not in a flood zone"', async () => {
+    services(['environment.data.gov.uk', 'planning.data.gov.uk']);
+    const checks = await fetchAreaChecks(point, ['england', 'wales']);
+    // Wales answered "nothing here", but the home may be in England
+    expect(checks.flood).toBeNull();
+    expect(checks.conservation).toBeNull();
+    expect(checks.article4).toBeNull();
+    expect(checks.failed).toEqual(['flood zones (England)', 'conservation areas (England)', 'Article 4 directions']);
+    expect(summariseArea(checks, { wales: false })).toMatchObject({ floodZone: null, conservation: null });
   });
 });

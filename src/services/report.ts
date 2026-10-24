@@ -1,6 +1,6 @@
 import type { PropertyListing } from '../adapters/types';
 import { formatMoney, SITE_NAMES } from './format';
-import { customCostTotals, sourcingFee, type BrrResult, type BuyToLetResult, type DealInputs, type FlipResult, type HmoResult } from './calculators';
+import { customCostTotals, DEFAULT_TERM_YEARS, sourcingFee, type BrrResult, type BuyToLetResult, type DealInputs, type FlipResult, type HmoResult } from './calculators';
 import { headingColour, isBranded, type Branding } from './branding';
 import { FLOOD_WORDS, type AreaChecks } from './area-checks';
 import { daysOnMarket, describeChange, describePortalChanges, priceChange } from './price-history';
@@ -200,7 +200,7 @@ function costLines(i: DealInputs): Array<[string, string | null]> {
 
 function dealSections({ inputs, btl, brr, flip, hmo, show = defaultStrategies(inputs) }: ReportInput['deal']): ReportSection[] {
   if (!(inputs.price > 0)) return [];
-  const mortgage = `${inputs.depositPct}% deposit, ${inputs.ratePct}% a year, ${inputs.mortgageType === 'interest_only' ? 'interest only' : `repayment over ${inputs.termYears} years`}`;
+  const mortgage = `${inputs.depositPct}% deposit, ${inputs.ratePct}% a year, ${inputs.mortgageType === 'interest_only' ? 'interest only' : `repayment over ${inputs.termYears > 0 ? inputs.termYears : DEFAULT_TERM_YEARS} years`}`;
   const purchase: Array<[string, string | null]> = [
     ['Price used', formatMoney(inputs.price)],
     [btl.tax.name, `${formatMoney(btl.tax.total)}${btl.tax.note ? ` (${btl.tax.note})` : ''}`],

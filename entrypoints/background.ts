@@ -99,16 +99,23 @@ async function handleCaptureAndEnrich(
       result.listing = { ...result.listing, epcEnergy: await fetchCertificateEnergy(settings.epcApiToken, certificate) };
     }
     console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');
+    // The register did not answer: a home found at an earlier capture stays
+    const failed = result.enrichmentStatus === 'api_error';
+    const detail = result.enrichmentDetail;
     // Keep the explanation with the listing so the CSV can show it later
-    result.listing = await saveListing({ ...result.listing, enrichmentDetail: result.enrichmentDetail ?? null });
-    if (result.listing.addressConfidence === 'user_choice') result.enrichmentDetail = result.listing.enrichmentDetail ?? undefined;
+    result.listing = await saveListing({ ...result.listing, enrichmentDetail: detail ?? null }, { keepAddress: failed });
+    if (failed && result.listing.fullAddress) {
+      result.enrichmentDetail = `${(detail ?? 'The EPC register did not answer').replace(/[.\s]+$/, '')}. The address found before is kept`;
+    } else if (result.listing.addressConfidence === 'user_choice') {
+      result.enrichmentDetail = result.listing.enrichmentDetail ?? undefined;
+    }
     return result;
   }
 
-  // No enrichment — save as-is
+  // No enrichment — save as-is, keeping a home found at an earlier capture
   console.log('PropSnap: EPC enrichment skipped (disabled or no token)');
   return {
-    listing: await saveListing(listing),
+    listing: await saveListing(listing, { keepAddress: true }),
     enrichmentStatus: 'skipped',
     enrichmentDetail: !settings.epcApiToken ? 'No EPC API token set' : 'Auto-enrich is disabled',
   };

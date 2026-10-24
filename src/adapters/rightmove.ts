@@ -1,6 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { rightmoveAddedDate, rightmovePriceChanges } from './listing-dates';
-import { LISTING_URLS } from './listing-urls';
+import { checkedListingId, LISTING_URLS } from './listing-urls';
 import { findEpcBandInText } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
@@ -30,8 +30,14 @@ export class RightmoveAdapter implements SiteAdapter {
   }
 
   async extract(): Promise<PropertyListing> {
-    const rawModel = this.readModelFromScripts() ?? (await this.readModelFromPage());
-    const root = rawModel ? unpackPageModel(rawModel) : null;
+    const fromUrl = this.getListingId();
+    // The script copy is the page as it was first loaded. After the site moves
+    // to another listing without a full load, only the live page model holds it
+    const scripted = modelRoot(this.readModelFromScripts());
+    const scriptedId = scripted?.propertyData?.id;
+    const current = scripted?.propertyData && (!fromUrl || scriptedId == null || String(scriptedId) === fromUrl);
+    const live = current ? null : modelRoot(await this.readModelFromPage());
+    const root = live?.propertyData ? live : scripted;
     const propertyData = root?.propertyData;
 
     if (!propertyData) {
@@ -57,7 +63,7 @@ export class RightmoveAdapter implements SiteAdapter {
     const now = new Date();
 
     return {
-      listingId: String(propertyData.id ?? this.getListingId()),
+      listingId: checkedListingId(fromUrl, propertyData.id),
       source: 'rightmove',
       url: window.location.href,
 
@@ -260,6 +266,11 @@ export function unpackPageModel(model: unknown): any | null {
 
   const root = resolve(0);
   return root && typeof root === 'object' ? root : null;
+}
+
+/** The unpacked page model, or null when there is none */
+function modelRoot(model: unknown): any | null {
+  return model ? unpackPageModel(model) : null;
 }
 
 /**

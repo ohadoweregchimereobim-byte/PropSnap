@@ -154,6 +154,28 @@ describe('kept sold prices', () => {
     expect(fresh.at).toBe(Date.parse('2026-10-24T12:00:00Z'));
   });
 
+  it('say which search failed, and are not kept until both answer', async () => {
+    fakeSession();
+    const both = { postcode: 'CF24 2QH', street: 'TWEEDSMUIR ROAD', outcode: 'CF24' };
+    let streetUp = false;
+    // The street search is the slow one; it fails the first time
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => (String(init?.body).includes('STRSTARTS') && !streetUp
+      ? new Response('', { status: 503 })
+      : new Response(JSON.stringify(answer))));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const half = await fetchSoldPricesCached(both);
+    expect(half.sales).toHaveLength(1);
+    expect(half.failed).toEqual(['street']);
+
+    streetUp = true;
+    const whole = await fetchSoldPricesCached(both);
+    expect(whole.failed).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    await fetchSoldPricesCached(both);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it('are asked for again after a day', async () => {
     fakeSession();
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer)));
