@@ -1,6 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import { formatMoney, SITE_NAMES } from './format';
-import type { BrrResult, BuyToLetResult, DealInputs } from './calculators';
+import { customCostTotals, sourcingFee, type BrrResult, type BuyToLetResult, type DealInputs, type FlipResult, type HmoResult } from './calculators';
+import { headingColour, isBranded, type Branding } from './branding';
 import { describeChange, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
@@ -28,24 +29,50 @@ export interface ReportSection {
   text?: string;
 }
 
+export interface ReportBrand {
+  company: string;
+  contact: string;
+  logo: string | null;
+  /** For the bar at the top */
+  colour: string;
+  /** For headings: the brand colour, or dark grey when it is too light to read */
+  headingColour: string;
+}
+
 export interface Report {
   title: string;
   subtitle: string;
   sections: ReportSection[];
   footer: string;
+  brand: ReportBrand | null;
+}
+
+/** Which deal calculators go in the report */
+export interface Strategies {
+  btl: boolean;
+  brr: boolean;
+  flip: boolean;
+  hmo: boolean;
+}
+
+/** Buy-to-let always; BRR and flip once works or a new value are typed; HMO once rooms and a room rent are */
+export function defaultStrategies(i: DealInputs): Strategies {
+  const works = i.refurbCost > 0 || (i.valueAfterRefurb > 0 && i.valueAfterRefurb !== i.price);
+  return { btl: true, brr: works, flip: works, hmo: i.hmoRooms > 0 && i.hmoRoomRent > 0 };
 }
 
 export interface ReportInput {
   listing: PropertyListing;
   /** The sold prices as filtered on the page; null when not loaded */
   sold: { view: SoldPriceView; where: string; filters: string } | null;
-  deal: { inputs: DealInputs; btl: BuyToLetResult; brr: BrrResult };
+  deal: { inputs: DealInputs; btl: BuyToLetResult; brr: BrrResult; flip?: FlipResult; hmo?: HmoResult; show?: Strategies };
   pipeline: Pipeline | null;
   /** The user's labels and activity; shown with the notes */
   labels?: string[];
   activity?: Activity[];
   includeNotes: boolean;
   generatedAt: Date;
+  branding?: Branding | null;
 }
 
 const SOLD_ROWS = 20;
@@ -144,29 +171,50 @@ function soldSection(sold: NonNullable<ReportInput['sold']>, l: PropertyListing)
   };
 }
 
-function dealSections({ inputs, btl, brr }: ReportInput['deal']): ReportSection[] {
+function costLines(i: DealInputs): Array<[string, string | null]> {
+  const fee = sourcingFee(i);
+  const once = i.customCosts.filter((c) => c.when === 'once');
+  const monthly = i.customCosts.filter((c) => c.when === 'monthly');
+  const list = (costs: typeof once) => costs.map((c) => `${c.name} ${formatMoney(c.amount)}`).join(', ');
+  return [
+    ['Sourcing fee', fee > 0 ? `${formatMoney(fee)}${i.sourcingFeeType === 'pct' ? ` (${i.sourcingFee}% of the price)` : ''}` : null],
+    ['Other one-off costs', once.length ? list(once) : null],
+    ['Other monthly costs', monthly.length ? `${list(monthly)} (${formatMoney(customCostTotals(i.customCosts).monthly)} a month)` : null],
+  ];
+}
+
+function dealSections({ inputs, btl, brr, flip, hmo, show = defaultStrategies(inputs) }: ReportInput['deal']): ReportSection[] {
   if (!(inputs.price > 0)) return [];
   const mortgage = `${inputs.depositPct}% deposit, ${inputs.ratePct}% a year, ${inputs.mortgageType === 'interest_only' ? 'interest only' : `repayment over ${inputs.termYears} years`}`;
-  const sections: ReportSection[] = [{
-    heading: 'Purchase and buy-to-let',
-    rows: compact([
-      ['Price used', formatMoney(inputs.price)],
-      [btl.tax.name, `${formatMoney(btl.tax.total)}${btl.tax.note ? ` (${btl.tax.note})` : ''}`],
-      ['Legal fees and survey', formatMoney(inputs.buyingCosts)],
-      ['Mortgage', `${formatMoney(btl.loan)}: ${mortgage}`],
-      ['Mortgage payment', `${formatMoney(btl.mortgageMonthly)} a month`],
-      ['Rent', inputs.rentMonthly > 0 ? `${formatMoney(inputs.rentMonthly)} a month` : 'Not entered'],
-      ['Running costs', inputs.rentMonthly > 0 ? `${formatMoney(btl.runningCostsMonthly)} a month (agent ${inputs.managementPct}%, repairs and empty months ${inputs.maintenancePct}%, other ${formatMoney(inputs.otherMonthly)})` : null],
-      ['Gross yield', inputs.rentMonthly > 0 ? pct(btl.grossYieldPct) : null],
-      ['Net yield (before mortgage)', inputs.rentMonthly > 0 ? pct(btl.netYieldPct) : null],
-      ['Cashflow', inputs.rentMonthly > 0 ? `${formatMoney(btl.cashflowMonthly)} a month` : null],
-      ['Cash put in', formatMoney(btl.cashInvested)],
-      ['Return on cash', inputs.rentMonthly > 0 && btl.returnOnCashPct != null ? pct(btl.returnOnCashPct) : null],
-    ]),
-  }];
+  const purchase: Array<[string, string | null]> = [
+    ['Price used', formatMoney(inputs.price)],
+    [btl.tax.name, `${formatMoney(btl.tax.total)}${btl.tax.note ? ` (${btl.tax.note})` : ''}`],
+    ['Legal fees and survey', formatMoney(inputs.buyingCosts)],
+    ...costLines(inputs),
+  ];
+  const sections: ReportSection[] = [];
 
-  // Only when the user has planned works or a new value
-  if (inputs.refurbCost > 0 || (inputs.valueAfterRefurb > 0 && inputs.valueAfterRefurb !== inputs.price)) {
+  if (show.btl) {
+    sections.push({
+      heading: 'Purchase and buy-to-let',
+      rows: compact([
+        ...purchase,
+        ['Mortgage', `${formatMoney(btl.loan)}: ${mortgage}`],
+        ['Mortgage payment', `${formatMoney(btl.mortgageMonthly)} a month`],
+        ['Rent', inputs.rentMonthly > 0 ? `${formatMoney(inputs.rentMonthly)} a month` : 'Not entered'],
+        ['Running costs', inputs.rentMonthly > 0 ? `${formatMoney(btl.runningCostsMonthly)} a month (agent ${inputs.managementPct}%, repairs and empty months ${inputs.maintenancePct}%, other ${formatMoney(inputs.otherMonthly)})` : null],
+        ['Gross yield', inputs.rentMonthly > 0 ? pct(btl.grossYieldPct) : null],
+        ['Net yield (before mortgage)', inputs.rentMonthly > 0 ? pct(btl.netYieldPct) : null],
+        ['Cashflow', inputs.rentMonthly > 0 ? `${formatMoney(btl.cashflowMonthly)} a month` : null],
+        ['Cash put in', formatMoney(btl.cashInvested)],
+        ['Return on cash', inputs.rentMonthly > 0 && btl.returnOnCashPct != null ? pct(btl.returnOnCashPct) : null],
+      ]),
+    });
+  } else {
+    sections.push({ heading: 'Purchase', rows: compact(purchase) });
+  }
+
+  if (show.brr) {
     sections.push({
       heading: 'Buy, refurbish, refinance',
       rows: compact([
@@ -178,6 +226,48 @@ function dealSections({ inputs, btl, brr }: ReportInput['deal']): ReportSection[
         ['Money left in the deal', brr.moneyLeftIn <= 0 ? 'None' : formatMoney(brr.moneyLeftIn)],
         ['Cashflow', inputs.rentMonthly > 0 ? `${formatMoney(brr.cashflowMonthly)} a month` : null],
         ['Return on money left in', inputs.rentMonthly > 0 && brr.returnOnMoneyLeftPct != null ? pct(brr.returnOnMoneyLeftPct) : null],
+      ]),
+    });
+  }
+
+  if (show.flip && flip) {
+    sections.push({
+      heading: 'Flip (buy, do up and sell)',
+      rows: compact([
+        ['Works', formatMoney(inputs.refurbCost)],
+        ['Sale price', formatMoney(flip.salePrice)],
+        ['Months held', String(inputs.flipMonths)],
+        ['Bridging loan', flip.loan > 0
+          ? `${formatMoney(flip.loan)} (${inputs.bridgingPct}% of the price, ${inputs.bridgingRatePct}% a month, fees ${inputs.bridgingFeesPct}%)`
+          : 'None, bought with cash'],
+        ['Finance costs', flip.loan > 0 ? formatMoney(flip.financeCost) : null],
+        ['Holding costs', formatMoney(flip.holdingCost)],
+        ['Selling costs', `${formatMoney(flip.sellingCost)} (agent ${inputs.sellingFeePct}%, legal ${formatMoney(inputs.saleLegalFees)})`],
+        ['Total cost', formatMoney(flip.totalCost)],
+        ['Profit before tax', formatMoney(flip.profit)],
+        ['Profit on cost', flip.profitOnCostPct != null ? pct(flip.profitOnCostPct) : null],
+        ['Cash needed', formatMoney(flip.cashNeeded)],
+        ['Return on cash', flip.returnOnCashPct != null ? pct(flip.returnOnCashPct) : null],
+      ]),
+    });
+  }
+
+  if (show.hmo && hmo && inputs.hmoRooms > 0) {
+    sections.push({
+      heading: 'HMO (let by the room)',
+      rows: compact([
+        ['Rooms', `${inputs.hmoRooms} at ${formatMoney(inputs.hmoRoomRent)} a month`],
+        ['Rent', `${formatMoney(hmo.rentMonthly)} a month`],
+        ['Bills', `${formatMoney(hmo.billsMonthly)} a month`],
+        ['Licence', inputs.hmoLicenceCost > 0 ? `${formatMoney(inputs.hmoLicenceCost)} for ${inputs.hmoLicenceYears} years (${formatMoney(hmo.licenceMonthly)} a month)` : null],
+        ['Running costs', `${formatMoney(hmo.runningCostsMonthly)} a month (management ${inputs.hmoManagementPct}%, repairs and empty rooms ${inputs.maintenancePct}%, bills, other, licence)`],
+        ['Mortgage payment', `${formatMoney(hmo.mortgageMonthly)} a month (${mortgage})`],
+        ['Conversion works', inputs.refurbCost > 0 ? formatMoney(inputs.refurbCost) : null],
+        ['Gross yield', pct(hmo.grossYieldPct)],
+        ['Net yield (before mortgage)', pct(hmo.netYieldPct)],
+        ['Cashflow', `${formatMoney(hmo.cashflowMonthly)} a month${hmo.cashflowPerRoom != null ? ` (${formatMoney(hmo.cashflowPerRoom)} a room)` : ''}`],
+        ['Cash put in', formatMoney(hmo.cashInvested)],
+        ['Return on cash', hmo.returnOnCashPct != null ? pct(hmo.returnOnCashPct) : null],
       ]),
     });
   }
@@ -283,11 +373,17 @@ export function buildReport(input: ReportInput): Report {
     l.price ? `${formatMoney(l.price)}${l.listingType === 'rent' ? ' a month' : ''}` : null,
   ].filter(Boolean).join(' · ');
 
+  const b = input.branding;
+  const brand: ReportBrand | null = b && isBranded(b)
+    ? { company: b.company, contact: b.contact, logo: b.logo, colour: b.colour, headingColour: headingColour(b.colour) }
+    : null;
+
   return {
     title: l.fullAddress || l.displayAddress || 'Property report',
     subtitle: facts,
     sections,
-    footer: `Property report made with PropSnap on ${date(input.generatedAt.toISOString())}. `
+    brand,
+    footer: `${brand?.company ? `Prepared by ${brand.company}` : 'Property report made with PropSnap'} on ${date(input.generatedAt.toISOString())}. `
       + 'Figures are estimates from the listing, public records and your own numbers. Not financial or tax advice.',
   };
 }

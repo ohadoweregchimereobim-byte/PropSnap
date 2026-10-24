@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   brr,
   buyToLet,
+  cleanCustomCosts,
   dealInputsFor,
+  flip,
+  hmo,
+  sourcingFee,
   DEFAULT_DEAL_INPUTS,
   monthlyMortgage,
   purchaseTax,
@@ -157,5 +161,107 @@ describe('dealInputsFor', () => {
     expect(inputs.region).toBe('wales');
     // The user chose the region, so the border warning goes away
     expect(regionSure).toBe(true);
+  });
+});
+
+describe('sourcing fee and custom costs', () => {
+  it('adds them to the cash put in and the running costs', () => {
+    const plain = buyToLet(deal({}));
+    const r = buyToLet(deal({
+      sourcingFee: 2,
+      sourcingFeeType: 'pct',
+      customCosts: [{ name: 'Gas safety check', amount: 90, when: 'once' }, { name: 'Landlord insurance', amount: 30, when: 'monthly' }],
+    }));
+    expect(sourcingFee({ sourcingFee: 2, sourcingFeeType: 'pct', price: 415_000 })).toBe(8_300);
+    expect(sourcingFee({ sourcingFee: 3_000, sourcingFeeType: 'fixed', price: 415_000 })).toBe(3_000);
+    expect(r.cashInvested).toBe(plain.cashInvested + 8_300 + 90);
+    expect(r.runningCostsMonthly).toBe(plain.runningCostsMonthly + 30);
+    expect(brr(deal({ sourcingFee: 3_000 })).cashIn).toBe(brr(deal({})).cashIn + 3_000);
+  });
+
+  it('checks saved custom costs', () => {
+    expect(cleanCustomCosts([
+      { name: '  Gas   safety ', amount: 90, when: 'once' },
+      { name: 'Insurance', amount: 30, when: 'monthly' },
+      { name: '', amount: 10, when: 'once' },
+      { name: 'Free', amount: 0, when: 'once' },
+      { name: 'Odd', amount: 5, when: 'weekly' },
+      'junk',
+    ])).toEqual([
+      { name: 'Gas safety', amount: 90, when: 'once' },
+      { name: 'Insurance', amount: 30, when: 'monthly' },
+      { name: 'Odd', amount: 5, when: 'once' },
+    ]);
+    expect(cleanCustomCosts(Array.from({ length: 15 }, (_, n) => ({ name: `c${n}`, amount: 1, when: 'once' })))).toHaveLength(10);
+  });
+
+  it('keeps saved fee type and costs in dealInputsFor', () => {
+    const { inputs } = dealInputsFor(
+      { price: 250_000, listingType: 'sale', postcode: 'CF14 9BP', postcodePartial: 'CF14' },
+      { sourcingFeeType: 'pct', sourcingFee: 2, customCosts: [{ name: 'Survey', amount: 600, when: 'once' }] },
+    );
+    expect(inputs.sourcingFeeType).toBe('pct');
+    expect(inputs.sourcingFee).toBe(2);
+    expect(inputs.customCosts).toEqual([{ name: 'Survey', amount: 600, when: 'once' }]);
+    expect(dealInputsFor({ price: 1, listingType: 'sale', postcode: null, postcodePartial: null }, { sourcingFeeType: 'x' as never }).inputs.sourcingFeeType).toBe('fixed');
+  });
+});
+
+describe('flip', () => {
+  const flipDeal = (extra: Partial<DealInputs> = {}) => deal({
+    price: 150_000, buyer: 'home_mover', buyingCosts: 1_500, refurbCost: 30_000, valueAfterRefurb: 220_000,
+    flipMonths: 6, holdingMonthly: 300, sellingFeePct: 1.5, saleLegalFees: 1_200,
+    bridgingPct: 75, bridgingRatePct: 1, bridgingFeesPct: 2, ...extra,
+  });
+
+  it('works out the profit with a bridging loan', () => {
+    const r = flip(flipDeal());
+    expect(r.tax.total).toBe(500);
+    expect(r.loan).toBe(112_500);
+    // 6 months at 1% a month rolled up, plus 2% fees
+    expect(r.financeCost).toBe(6_750 + 2_250);
+    expect(r.holdingCost).toBe(1_800);
+    expect(r.sellingCost).toBe(3_300 + 1_200);
+    expect(r.totalCost).toBe(182_000 + 9_000 + 1_800 + 4_500);
+    expect(r.profit).toBe(22_700);
+    expect(r.cashNeeded).toBe(182_000 - 112_500 + 2_250 + 1_800);
+    expect(r.profitOnCostPct).toBeCloseTo((22_700 / 197_300) * 100, 6);
+    expect(r.returnOnCashPct).toBeCloseTo((22_700 / 73_550) * 100, 6);
+    expect(r.profitMonthly).toBeCloseTo(22_700 / 6, 6);
+  });
+
+  it('buys with cash when there is no bridging loan, and counts monthly custom costs while held', () => {
+    const r = flip(flipDeal({ bridgingPct: 0, customCosts: [{ name: 'Alarm', amount: 50, when: 'monthly' }] }));
+    expect(r.financeCost).toBe(0);
+    expect(r.holdingCost).toBe((300 + 50) * 6);
+    expect(r.cashNeeded).toBe(182_000 + 2_100);
+  });
+
+  it('sells at the price paid when no value after the works is typed', () => {
+    expect(flip(flipDeal({ valueAfterRefurb: 0 })).salePrice).toBe(150_000);
+  });
+});
+
+describe('hmo', () => {
+  it('works out the room rents, bills, licence and cashflow', () => {
+    const r = hmo(deal({
+      price: 200_000, buyer: 'home_mover', depositPct: 25, ratePct: 6, mortgageType: 'interest_only', buyingCosts: 1_500,
+      refurbCost: 20_000, hmoRooms: 5, hmoRoomRent: 550, hmoManagementPct: 12, maintenancePct: 8,
+      hmoBillsMonthly: 500, otherMonthly: 100, hmoLicenceCost: 1_200, hmoLicenceYears: 5,
+    }));
+    expect(r.rentMonthly).toBe(2_750);
+    expect(r.licenceMonthly).toBe(20);
+    expect(r.runningCostsMonthly).toBe(550 + 500 + 100 + 20);
+    expect(r.mortgageMonthly).toBe(750);
+    expect(r.cashflowMonthly).toBe(830);
+    expect(r.cashflowPerRoom).toBe(166);
+    expect(r.cashInvested).toBe(50_000 + 1_500 + 1_500 + 20_000);
+    expect(r.grossYieldPct).toBeCloseTo(16.5, 6);
+    expect(r.netYieldPct).toBeCloseTo((1_580 * 12 / 200_000) * 100, 6);
+    expect(r.returnOnCashPct).toBeCloseTo((830 * 12 / 73_000) * 100, 6);
+  });
+
+  it('has no per-room figure without rooms', () => {
+    expect(hmo(deal({ hmoRooms: 0 })).cashflowPerRoom).toBeNull();
   });
 });

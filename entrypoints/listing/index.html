@@ -12,7 +12,33 @@
       <a href="./dashboard.html" class="btn">← Dashboard</a>
       <a id="openListing" class="btn" target="_blank" rel="noopener noreferrer" hidden>Open listing</a>
       <span id="reportControls" class="nav-report" hidden>
-        <label class="report-notes"><input type="checkbox" id="reportNotes" /> Include my stage, notes, labels and timeline</label>
+        <details id="reportOptions" class="report-options">
+          <summary class="btn">Report options</summary>
+          <div class="report-panel">
+            <fieldset id="reportStrategies">
+              <legend>Put in the report</legend>
+              <label><input type="checkbox" data-strategy="btl" /> Buy-to-let</label>
+              <label><input type="checkbox" data-strategy="brr" /> Buy, refurbish, refinance</label>
+              <label><input type="checkbox" data-strategy="flip" /> Flip</label>
+              <label><input type="checkbox" data-strategy="hmo" /> HMO</label>
+              <label class="report-notes"><input type="checkbox" id="reportNotes" /> My stage, notes, labels and timeline</label>
+            </fieldset>
+            <fieldset>
+              <legend>Your branding (on every report)</legend>
+              <label>Company name <input id="brandCompany" maxlength="80" placeholder="For example: Acme Property Sourcing" /></label>
+              <label>Contact details <textarea id="brandContact" rows="2" maxlength="300" placeholder="Phone, email, website"></textarea></label>
+              <label>Colour <input id="brandColour" type="color" value="#1d4ed8" /></label>
+              <div class="brand-logo">
+                <span>Logo</span>
+                <img id="brandLogoPreview" alt="Your logo" hidden />
+                <input id="brandLogo" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <button id="brandLogoRemove" class="btn btn-small" type="button" hidden>Remove</button>
+              </div>
+              <p class="hint">PNG, JPEG, WebP or GIF, under 290 KB. Kept on this computer only.</p>
+              <p id="brandSaved" class="hint" role="status"></p>
+            </fieldset>
+          </div>
+        </details>
         <button id="reportBtn" class="btn btn-primary" type="button">Save report as PDF</button>
       </span>
     </nav>
@@ -213,10 +239,50 @@
           </fieldset>
 
           <fieldset>
-            <legend>Refurbish and refinance (BRR)</legend>
+            <legend>Works and refinance (BRR)</legend>
             <label>Refurbishment cost (£) <input type="number" data-field="refurbCost" min="0" step="1000" /></label>
             <label>Value after the works (£) <input type="number" data-field="valueAfterRefurb" min="0" step="1000" /></label>
             <label>New mortgage (% of the new value) <input type="number" data-field="refinanceLtvPct" min="0" max="100" step="1" /></label>
+            <p class="hint">The flip uses the same works and sells at the value after the works. The HMO takes the works as the conversion cost.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Flip (buy, do up and sell)</legend>
+            <label>Months from purchase to sale <input type="number" data-field="flipMonths" min="0" step="1" /></label>
+            <label>Holding costs (£ a month) <input type="number" data-field="holdingMonthly" min="0" step="25" /></label>
+            <label>Agent's fee on the sale (%) <input type="number" data-field="sellingFeePct" min="0" max="100" step="0.1" /></label>
+            <label>Legal fees on the sale (£) <input type="number" data-field="saleLegalFees" min="0" step="100" /></label>
+            <label>Bridging loan (% of the price) <input type="number" data-field="bridgingPct" min="0" max="100" step="5" /></label>
+            <label>Bridging interest (% a month) <input type="number" data-field="bridgingRatePct" min="0" step="0.05" /></label>
+            <label>Bridging fees (% of the loan) <input type="number" data-field="bridgingFeesPct" min="0" step="0.25" /></label>
+            <p class="hint">Holding costs: council tax, energy and insurance while the home is empty. A bridging loan of 0% means you buy with cash. Interest is added up and paid from the sale.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>HMO (let by the room)</legend>
+            <label>Rooms to let <input type="number" data-field="hmoRooms" min="0" step="1" /></label>
+            <label>Rent per room (£ a month) <input type="number" data-field="hmoRoomRent" min="0" step="10" /></label>
+            <label>Bills (£ a month) <input type="number" data-field="hmoBillsMonthly" min="0" step="10" /></label>
+            <label>Management (% of rent) <input type="number" data-field="hmoManagementPct" min="0" max="100" step="0.5" /></label>
+            <label>Licence fee (£) <input type="number" data-field="hmoLicenceCost" min="0" step="50" /></label>
+            <label>Licence lasts (years) <input type="number" data-field="hmoLicenceYears" min="1" step="1" /></label>
+            <p class="hint">Bills: energy, water, broadband, council tax and TV licence. Uses the purchase and mortgage above, and the repairs % and other costs from the single let. The licence fee is spread over the years it lasts.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Sourcing fee and your own costs</legend>
+            <label>Sourcing fee
+              <span class="pair">
+                <input type="number" data-field="sourcingFee" min="0" step="100" aria-label="Sourcing fee" />
+                <select data-field="sourcingFeeType" aria-label="Sourcing fee in">
+                  <option value="fixed">£</option>
+                  <option value="pct">% of price</option>
+                </select>
+              </span>
+            </label>
+            <div id="customCosts" class="custom-costs"></div>
+            <button id="addCost" class="btn btn-small" type="button">Add a cost</button>
+            <p class="hint">Added to every strategy: one-off costs with the purchase, monthly costs with the running costs.</p>
           </fieldset>
         </form>
 
@@ -242,6 +308,18 @@
             <h3>Buy, refurbish, refinance</h3>
             <p class="need-rent hint" hidden>Type the expected rent to see the cashflow.</p>
             <dl id="brrRows" class="rows"></dl>
+          </article>
+
+          <article class="card">
+            <h3>Flip</h3>
+            <p id="flipNeedValue" class="hint" hidden>Type the value after the works to see the profit.</p>
+            <dl id="flipCalcRows" class="rows"></dl>
+          </article>
+
+          <article class="card">
+            <h3>HMO</h3>
+            <p id="hmoNeedRooms" class="hint" hidden>Type the rooms and the rent per room to see the HMO figures.</p>
+            <dl id="hmoRows" class="rows"></dl>
           </article>
         </div>
       </div>
