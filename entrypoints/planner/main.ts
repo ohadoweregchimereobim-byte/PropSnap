@@ -56,7 +56,18 @@ async function init() {
   minutesInput.value = String(plan.minutesEach);
 
   dateInput.addEventListener('change', () => { plan.date = dateInput.value || today; save(); render(); });
-  startInput.addEventListener('input', () => { plan.start = startInput.value; save(); renderLinks(); });
+  // Links follow every key; the save waits until typing pauses
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
+  startInput.addEventListener('input', () => {
+    plan.start = startInput.value;
+    renderLinks();
+    clearTimeout(startTimer);
+    startTimer = setTimeout(() => { startTimer = undefined; save(); }, 400);
+  });
+  // Save a start still waiting when the tab is closed or hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && startTimer) { clearTimeout(startTimer); startTimer = undefined; save(); }
+  });
   minutesInput.addEventListener('change', () => {
     const m = Number(minutesInput.value);
     plan.minutesEach = Number.isFinite(m) && m >= 5 && m <= 240 ? Math.round(m) : 30;
