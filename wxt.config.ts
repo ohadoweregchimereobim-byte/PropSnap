@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'PropSnap',
     description: 'Capture full property details from UK listing sites',
-    version: '0.7.1',
+    version: '0.8.0',
     icons: {
       16: '/icons/icon-16.png',
       32: '/icons/icon-32.png',
