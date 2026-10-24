@@ -131,7 +131,7 @@ body {
   margin-bottom: 12px;
 }
 
-.toolbar input,
+.toolbar input[type="search"],
 .toolbar select {
   padding: 7px 10px;
   border: 1px solid #e2e8f0;
@@ -141,7 +141,7 @@ body {
   color: #1e293b;
 }
 
-.toolbar input {
+.toolbar input[type="search"] {
   flex: 1;
   min-width: 220px;
 }
@@ -269,8 +269,10 @@ th button[aria-sort='descending']::after {
 }
 
 .row-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
   gap: 6px;
+  justify-content: start;
   white-space: nowrap;
 }
 
@@ -404,4 +406,55 @@ th button[aria-sort='descending']::after {
   color: #166534;
   white-space: nowrap;
   cursor: help;
+}
+
+/* Labels, last call and agent groups */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.last-call {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #1d4ed8;
+  cursor: help;
+}
+
+.group-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  color: #334155;
+}
+
+.agent-row td {
+  padding-top: 14px;
+  background: #f1f5f9;
+  font-size: 13px;
+  color: #334155;
+}
+
+.agent-row:hover {
+  background: none;
+}
+
+.agent-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+  white-space: pre-wrap;
 }

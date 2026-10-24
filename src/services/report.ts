@@ -5,6 +5,7 @@ import { describeChange, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
 import { bandForScore, describeEnergy, lowWithPotential } from './epc-energy';
+import { timeline, type Activity } from './crm';
 
 /**
  * The property report: what the listing page knows, laid out for print or
@@ -40,11 +41,15 @@ export interface ReportInput {
   sold: { view: SoldPriceView; where: string; filters: string } | null;
   deal: { inputs: DealInputs; btl: BuyToLetResult; brr: BrrResult };
   pipeline: Pipeline | null;
+  /** The user's labels and activity; shown with the notes */
+  labels?: string[];
+  activity?: Activity[];
   includeNotes: boolean;
   generatedAt: Date;
 }
 
 const SOLD_ROWS = 20;
+const TIMELINE_ROWS = 15;
 
 const pct = (n: number) => `${n.toFixed(2)}%`;
 const date = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -223,6 +228,35 @@ function flipSection(sold: NonNullable<ReportInput['sold']>): ReportSection | nu
   };
 }
 
+function notesSection(input: ReportInput): ReportSection | null {
+  const p = input.pipeline;
+  const labels = input.labels ?? [];
+  const items = timeline(input.activity ?? [], input.listing.priceHistory);
+  // The capture and price lines are in the report already; only the user's own entries count
+  const hasActivity = items.some((i) => i.id);
+  if (!p && labels.length === 0 && !hasActivity) return null;
+
+  const section: ReportSection = {
+    heading: 'Deal notes',
+    rows: compact([
+      ['Stage', p ? statusLabel(p.status) : null],
+      ['Follow up', p?.followUp ? date(`${p.followUp}T12:00:00Z`) : null],
+      ['Labels', labels.join(', ')],
+    ]),
+    text: p?.notes.trim() || undefined,
+  };
+  if (hasActivity) {
+    const shown = items.slice(0, TIMELINE_ROWS);
+    section.table = {
+      head: ['Date', 'What', 'Details'],
+      numeric: [],
+      rows: shown.map((i) => [date(i.at), i.title, i.text]),
+    };
+    if (items.length > shown.length) section.notes = [`The newest ${shown.length} of ${items.length} timeline entries.`];
+  }
+  return section;
+}
+
 export function buildReport(input: ReportInput): Report {
   const l = input.listing;
   const sections: ReportSection[] = [propertySection(l)];
@@ -238,15 +272,9 @@ export function buildReport(input: ReportInput): Report {
   }
   sections.push(...dealSections(input.deal));
 
-  if (input.includeNotes && input.pipeline) {
-    sections.push({
-      heading: 'Deal notes',
-      rows: compact([
-        ['Stage', statusLabel(input.pipeline.status)],
-        ['Follow up', input.pipeline.followUp ? date(`${input.pipeline.followUp}T12:00:00Z`) : null],
-      ]),
-      text: input.pipeline.notes.trim() || undefined,
-    });
+  if (input.includeNotes) {
+    const notes = notesSection(input);
+    if (notes) sections.push(notes);
   }
 
   const facts = [

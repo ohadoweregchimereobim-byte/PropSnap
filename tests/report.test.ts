@@ -114,6 +114,27 @@ describe('buildReport', () => {
     expect(section(r, 'Deal notes')!.text).toBe('Vendor wants a quick sale.\nViewing Sat 10am.');
   });
 
+  it('adds labels and the user timeline to the notes, and only when asked', () => {
+    const activity = [
+      { id: 'a1', at: '2026-10-20T09:00:00Z', kind: 'call' as const, text: 'Vendor flexible', outcome: 'spoke' as const },
+      { id: 'a2', at: '2026-10-21T09:00:00Z', kind: 'note' as const, text: 'Roof looks tired' },
+    ];
+    expect(section(buildReport(input({ labels: ['BRR'], activity })), 'Deal notes')).toBeUndefined();
+    const r = buildReport(input({ includeNotes: true, labels: ['BRR', 'Needs work'], activity }));
+    expect(row(r, 'Deal notes', 'Labels')).toBe('BRR, Needs work');
+    const rows = section(r, 'Deal notes')!.table!.rows;
+    expect(rows[0]).toEqual(['21 Oct 2026', 'Note', 'Roof looks tired']);
+    expect(rows[1]).toEqual(['20 Oct 2026', 'Call: Spoke to the agent', 'Vendor flexible']);
+  });
+
+  it('shows labels without a pipeline, and no timeline from price changes alone', () => {
+    const r = buildReport(input({ includeNotes: true, pipeline: null, labels: ['HMO'] }));
+    expect(row(r, 'Deal notes', 'Labels')).toBe('HMO');
+    expect(row(r, 'Deal notes', 'Stage')).toBeUndefined();
+    expect(section(r, 'Deal notes')!.table).toBeUndefined();
+    expect(section(buildReport(input({ includeNotes: true, pipeline: null })), 'Deal notes')).toBeUndefined();
+  });
+
   it('says it is not advice', () => {
     expect(buildReport(input()).footer).toContain('Not financial or tax advice');
   });

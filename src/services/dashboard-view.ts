@@ -2,6 +2,7 @@ import type { PropertyListing } from '../adapters/types';
 import { priceChange } from './price-history';
 import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
 import { listingKey, type UserDataMap } from './user-data';
+import { cleanLabels } from './crm';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -13,6 +14,8 @@ export type MatchFilter = 'all' | 'exact' | 'user_choice' | 'best_guess' | 'none
 export type PriceFilter = 'all' | 'reduced' | 'increased' | 'changed';
 /** A pipeline stage, or every active deal, or follow-ups due today or before */
 export type StatusFilter = 'all' | 'active' | 'due' | PipelineStatus;
+/** Hidden homes: left out (default), shown with the rest, or shown alone */
+export type HiddenFilter = 'hide' | 'show' | 'only';
 export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName' | 'status';
 
 export interface ViewOptions {
@@ -21,6 +24,9 @@ export interface ViewOptions {
   match: MatchFilter;
   price: PriceFilter;
   status: StatusFilter;
+  /** A label, or 'all' */
+  label: string;
+  hidden: HiddenFilter;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
 }
@@ -31,6 +37,8 @@ export const DEFAULT_VIEW: ViewOptions = {
   match: 'all',
   price: 'all',
   status: 'all',
+  label: 'all',
+  hidden: 'hide',
   sortKey: 'capturedAt',
   sortDir: 'desc',
 };
@@ -54,8 +62,15 @@ export interface ViewContext {
   today: string;
 }
 
-function searchText(l: PropertyListing, pipeline: Pipeline | null): string {
-  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source, pipeline?.notes]
+/** The user's labels on a listing, cleaned */
+export function labelsOf(l: PropertyListing, userData: UserDataMap | undefined): string[] {
+  return cleanLabels(userData?.[listingKey(l)]?.labels);
+}
+
+export const isHidden = (l: PropertyListing, userData: UserDataMap | undefined) => userData?.[listingKey(l)]?.hidden === true;
+
+function searchText(l: PropertyListing, pipeline: Pipeline | null, labels: string[]): string {
+  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source, pipeline?.notes, ...labels]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -82,6 +97,10 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
 
   const kept = listings.filter((l) => {
     const pipeline = pipelines.get(l) ?? null;
+    const hidden = isHidden(l, context.userData);
+    if ((view.hidden === 'hide' && hidden) || (view.hidden === 'only' && !hidden)) return false;
+    const labels = labelsOf(l, context.userData);
+    if (view.label !== 'all' && !labels.some((x) => x.toLowerCase() === view.label.toLowerCase())) return false;
     if (view.status === 'active' && !(pipeline && isActive(pipeline.status))) return false;
     if (view.status === 'due' && !isDue(pipeline, context.today)) return false;
     if (view.status !== 'all' && view.status !== 'active' && view.status !== 'due' && (pipeline?.status ?? 'new') !== view.status) return false;
@@ -93,7 +112,7 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
       if (view.price !== 'changed' && change.direction !== view.price) return false;
     }
     if (words.length === 0) return true;
-    const text = searchText(l, pipeline);
+    const text = searchText(l, pipeline, labels);
     return words.every((w) => text.includes(w));
   });
 
@@ -114,9 +133,10 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
 export function summarise(
   listings: PropertyListing[],
   context: ViewContext = { today: '' },
-): Record<Exclude<MatchFilter, 'all'> | 'total' | 'reduced' | 'active' | 'due', number> {
-  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0, reduced: 0, active: 0, due: 0 };
+): Record<Exclude<MatchFilter, 'all'> | 'total' | 'reduced' | 'active' | 'due' | 'hidden', number> {
+  const counts = { total: listings.length, exact: 0, user_choice: 0, best_guess: 0, none: 0, reduced: 0, active: 0, due: 0, hidden: 0 };
   for (const l of listings) {
+    if (isHidden(l, context.userData)) counts.hidden++;
     counts[matchGroup(l)]++;
     if (priceChange(l)?.direction === 'reduced') counts.reduced++;
     const pipeline = pipelineOf(l, context.userData);

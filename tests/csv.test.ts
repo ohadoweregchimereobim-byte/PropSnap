@@ -85,6 +85,26 @@ describe('listingsToCsv', () => {
     expect(row(listing())['Stage']).toBe('New');
   });
 
+  it('includes the labels, hidden and the last call', () => {
+    const csv = listingsToCsv([listing()], {
+      'openrent:1': {
+        labels: ['BRR', 'Needs work'],
+        hidden: true,
+        activity: [
+          { id: 'a', at: '2026-10-18T09:00:00Z', kind: 'call', text: '', outcome: 'no_answer' },
+          { id: 'b', at: '2026-10-20T09:00:00Z', kind: 'call', text: 'flexible on price', outcome: 'spoke' },
+          { id: 'c', at: '2026-10-21T09:00:00Z', kind: 'note', text: 'later note' },
+        ],
+      },
+    });
+    const [headers, cells] = csv.split('\n').map((line) => line.split(','));
+    const cell = (name: string) => cells![headers!.indexOf(name)];
+    expect(cell('Labels')).toBe('BRR; Needs work');
+    expect(cell('Hidden')).toBe('yes');
+    expect(cell('Last Call')).toBe('2026-10-20 Spoke to the agent: flexible on price');
+    expect(row(listing())['Last Call']).toBe('');
+  });
+
   it("includes the certificate's rating now and potential", () => {
     const cells = row(listing({ epcEnergy: { certificateNumber: 'c', currentBand: 'E', potentialBand: 'C', currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] } }));
     expect(cells['EPC Certificate Now']).toBe('E 50');
