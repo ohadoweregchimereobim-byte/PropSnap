@@ -56,6 +56,25 @@ describe('chooseCandidate', () => {
   });
 });
 
+describe('the certificate follows the home', () => {
+  const energy = (cert: string) => ({ certificateNumber: cert, currentBand: 'E' as const, potentialBand: 'C' as const, currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] });
+
+  it('points at the picked home, and drops energy figures of another home', () => {
+    const picked = chooseCandidate(listing({ epcCertificateNumber: 'cert-50', epcEnergy: energy('cert-50') }), 'cert-52');
+    expect(picked.epcCertificateNumber).toBe('cert-52');
+    expect(picked.epcEnergy).toBeNull();
+    const same = chooseCandidate(listing({ epcCertificateNumber: 'cert-52', epcEnergy: energy('cert-52') }), 'cert-52');
+    expect(same.epcEnergy?.certificateNumber).toBe('cert-52');
+  });
+
+  it('keeps the certificate and its figures on a new capture of a picked or exact home', () => {
+    const previous = listing({ addressConfidence: 'user_choice', epcCertificateNumber: 'cert-52', epcEnergy: energy('cert-52') });
+    expect(keepUserChoice(previous, listing({ fullAddress: '50 Lyric Way, Thornhill, CARDIFF' })).epcCertificateNumber).toBe('cert-52');
+    const exact = listing({ addressConfidence: 'exact', addressCandidates: null, epcCertificateNumber: 'cert-50', epcEnergy: energy('cert-50') });
+    expect(reuseKnownAddress(exact, listing({ fullAddress: null, addressConfidence: null, addressCandidates: null }))?.epcEnergy?.certificateNumber).toBe('cert-50');
+  });
+});
+
 describe('keepUserChoice', () => {
   const picked = chooseCandidate(listing(), 'cert-52');
 

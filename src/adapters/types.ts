@@ -1,3 +1,5 @@
+import type { EpcEnergy } from '../services/epc-energy';
+
 /**
  * Normalised property listing data.
  * Every site adapter maps its raw data into this shape.
@@ -16,6 +18,8 @@ export interface PropertyListing {
   addressConfidence?: 'exact' | 'best_guess' | 'user_choice' | null; // How sure the EPC match is; user_choice = picked by the user
   addressCandidates?: AddressCandidate[] | null;   // On a best guess, the close homes the user can choose from (best guess first)
   enrichmentDetail?: string | null; // What the EPC match was based on, e.g. "Exact: matched on house number"
+  epcCertificateNumber?: string | null; // The certificate of the home the full address is (exact, best guess or picked)
+  epcEnergy?: EpcEnergy | null;     // That certificate's rating now and potential, with its improvements
 
   // Property details
   price: number | null;

@@ -46,6 +46,31 @@
       <p id="pipelineSaved" class="hint"></p>
     </section>
 
+    <section id="energy" class="energy" hidden aria-labelledby="energyTitle">
+      <div class="section-head">
+        <h2 id="energyTitle">Energy rating (EPC)</h2>
+        <button id="energyLoad" class="btn btn-small" type="button" hidden>Get EPC details</button>
+      </div>
+      <p id="energyStatus" class="hint" hidden></p>
+      <div id="energyBody" hidden>
+        <div class="energy-bands">
+          <span class="energy-side"><span class="energy-label">Now</span><span id="energyNow" class="band"></span></span>
+          <span class="energy-arrow" aria-hidden="true">→</span>
+          <span class="energy-side"><span class="energy-label">Potential</span><span id="energyPotential" class="band"></span></span>
+          <span id="energyGap" class="energy-gap"></span>
+        </div>
+        <p id="energyTag" class="energy-tag" hidden>Low rating with high potential: priced for its rating today, and lettable once improved.</p>
+        <p id="energyNote" class="hint"></p>
+        <div id="energyImprovementsBox" class="table-wrap" hidden>
+          <table class="sold-table">
+            <thead><tr><th>Recommended improvement</th><th>Typical cost</th><th class="num">Saving a year</th><th class="num">Rating after</th></tr></thead>
+            <tbody id="energyImprovements"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="attribution">From the home's certificate on the government EPC register. Costs and savings are the assessor's typical figures from when the certificate was made.</p>
+    </section>
+
     <section id="sold" class="sold" hidden aria-labelledby="soldTitle">
       <div class="section-head">
         <h2 id="soldTitle">Sold prices nearby</h2>
@@ -89,6 +114,17 @@
           </table>
         </div>
         <p id="soldMore" class="hint" hidden></p>
+
+        <div id="flips" class="flips" hidden>
+          <h3>Flipped nearby</h3>
+          <p id="flipsSummary" class="hint"></p>
+          <div class="table-wrap">
+            <table class="sold-table">
+              <thead><tr><th>Address</th><th>Bought</th><th>Sold</th><th class="num">Rise</th><th class="num">Held</th></tr></thead>
+              <tbody id="flipRows"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <p class="attribution">Sales in England and Wales from HM Land Registry, usually 2 to 3 months behind. Contains HM Land Registry data © Crown copyright and database right. Licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener noreferrer">Open Government Licence v3.0</a>.</p>
     </section>

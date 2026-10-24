@@ -114,6 +114,59 @@ export interface SoldPriceView {
   high: number | null;
   /** Asking price against the median, in %; null for rent listings or no median */
   askingVsMedianPct: number | null;
+  /** Homes bought and sold again soon after for more (filters apply to the resale), newest resale first */
+  flips: Flip[];
+}
+
+/** A home bought and sold again within FLIP_MONTHS for at least FLIP_MIN_RISE_PCT more */
+export interface Flip {
+  bought: SoldPrice;
+  sold: SoldPrice;
+  /** £ */
+  rise: number;
+  risePct: number;
+  /** Whole months between the two sales */
+  months: number;
+}
+
+export const FLIP_MONTHS = 24;
+export const FLIP_MIN_RISE_PCT = 10;
+
+const homeKey = (s: SoldPrice) => [s.saon, s.paon, s.street, s.postcode].map((x) => (x ?? '').toUpperCase().trim()).join('|');
+
+function monthsBetween(from: string, to: string): number {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return (ty! - fy!) * 12 + (tm! - fm!) - (td! < fd! ? 1 : 0);
+}
+
+/**
+ * Homes resold soon after a purchase for clearly more: usually a refurbish
+ * and sell. A new build's first sale is not counted (it was never bought to
+ * do up), and both sales must be in the data fetched for this area.
+ */
+export function findFlips(sales: SoldPrice[], maxMonths = FLIP_MONTHS, minRisePct = FLIP_MIN_RISE_PCT): Flip[] {
+  const byHome = new Map<string, SoldPrice[]>();
+  for (const sale of sales) {
+    if (!sale.paon) continue;
+    const key = homeKey(sale);
+    byHome.set(key, [...(byHome.get(key) ?? []), sale]);
+  }
+
+  const flips: Flip[] = [];
+  for (const homeSales of byHome.values()) {
+    const ordered = [...homeSales].sort((a, b) => a.date.localeCompare(b.date));
+    for (let i = 1; i < ordered.length; i++) {
+      const bought = ordered[i - 1]!;
+      const sold = ordered[i]!;
+      if (bought.newBuild) continue;
+      const months = monthsBetween(bought.date, sold.date);
+      const rise = sold.price - bought.price;
+      const risePct = (rise / bought.price) * 100;
+      if (months <= maxMonths && risePct >= minRisePct) flips.push({ bought, sold, rise, risePct, months });
+    }
+  }
+  return flips.sort((a, b) => b.sold.date.localeCompare(a.sold.date));
 }
 
 export function median(values: number[]): number | null {
@@ -143,9 +196,16 @@ export function soldPriceView(
   const mid = median(prices);
   const asking = listing.listingType === 'sale' && listing.price ? listing.price : null;
 
+  // The type and years filters apply to the resale; this home's own history is shown apart
+  const flips = findFlips(sales).filter((f) =>
+    !thisHome.includes(f.sold)
+    && (options.types == null || options.types.includes(f.sold.propertyType))
+    && f.sold.date >= since);
+
   return {
     thisHome,
     comparables,
+    flips,
     median: mid,
     low: prices.length ? Math.min(...prices) : null,
     high: prices.length ? Math.max(...prices) : null,

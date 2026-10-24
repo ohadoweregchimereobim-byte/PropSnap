@@ -17,6 +17,9 @@ export function chooseCandidate(listing: PropertyListing, certificateNumber: str
     fullAddress: chosen.fullAddress,
     addressConfidence: 'user_choice',
     enrichmentDetail: `Chosen by you from ${candidates.length} close homes`,
+    epcCertificateNumber: chosen.certificateNumber,
+    // A different home has a different certificate; it is read again on the listing page
+    epcEnergy: listing.epcEnergy?.certificateNumber === chosen.certificateNumber ? listing.epcEnergy : null,
   };
 }
 
@@ -36,6 +39,8 @@ export function keepUserChoice(previous: PropertyListing | undefined, next: Prop
     addressConfidence: 'user_choice',
     addressCandidates: next.addressCandidates ?? previous.addressCandidates,
     enrichmentDetail: previous.enrichmentDetail,
+    epcCertificateNumber: previous.epcCertificateNumber ?? null,
+    epcEnergy: previous.epcEnergy ?? null,
   };
 }
 
@@ -69,6 +74,8 @@ export function reuseKnownAddress(previous: PropertyListing | undefined, next: P
     addressConfidence: previous.addressConfidence,
     addressCandidates: previous.addressCandidates ?? null,
     enrichmentDetail: previous.enrichmentDetail ?? null,
+    epcCertificateNumber: previous.epcCertificateNumber ?? null,
+    epcEnergy: previous.epcEnergy ?? null,
     // The listing's own rating wins; an exact match may have lent the certificate's
     epcRating: next.epcRating || (previous.addressConfidence === 'exact' ? previous.epcRating : null),
   };
