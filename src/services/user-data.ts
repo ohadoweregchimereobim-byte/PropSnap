@@ -1,6 +1,6 @@
 import type { DealInputs } from './calculators';
 import { cleanPipeline, type Pipeline } from './pipeline';
-import { AGENTS_KEY, cleanActivity, cleanAgentNotes, cleanLabels, newActivity, type Activity, type AgentNotes } from './crm';
+import { AGENTS_KEY, cleanActivity, cleanAgentNotes, cleanLabels, newActivity, stageForOutcome, type Activity, type AgentNotes, type CallOutcome } from './crm';
 import { withLock } from './storage-lock';
 
 /**
@@ -103,11 +103,13 @@ export async function updatePipeline(key: string, changes: Partial<PipelineField
     const after = pipeline?.status ?? 'new';
     let activity = cleanActivity(entry.activity);
     if (changes.status && after !== before) {
-      const stages = activity.filter((a) => a.kind === 'stage');
-      const last = stages[stages.length - 1];
-      const stageBeforeLast = stages[stages.length - 2]?.stage ?? 'new';
-      // Going straight back within a few minutes undoes a mis-click instead of adding to the history
-      if (last && activity[activity.length - 1] === last && now.getTime() - Date.parse(last.at) < UNDO_STAGE_MS && after === stageBeforeLast) {
+      // Stage entries and calls that moved the stage
+      const moves = activity.filter((a) => a.stage);
+      const last = moves[moves.length - 1];
+      const stageBeforeLast = moves[moves.length - 2]?.stage ?? 'new';
+      // Going straight back within a few minutes undoes a mis-click instead of adding to the history.
+      // A logged call stays: the call happened
+      if (last?.kind === 'stage' && activity[activity.length - 1] === last && now.getTime() - Date.parse(last.at) < UNDO_STAGE_MS && after === stageBeforeLast) {
         activity = activity.slice(0, -1);
       } else {
         activity.push(newActivity('stage', '', now, { stage: after }));
@@ -127,6 +129,24 @@ export function setHidden(key: string, hidden: boolean): Promise<void> {
 
 export function addActivity(key: string, activity: Activity): Promise<void> {
   return updateEntry(key, (entry) => ({ ...entry, activity: cleanActivity([...(entry.activity ?? []), activity]) }));
+}
+
+/**
+ * Log a call. An outcome that is a stage (viewing booked, offer made,
+ * accepted, rejected) moves the deal to that stage too, as one timeline
+ * entry: the call, marked with the stage it moved to.
+ */
+export function logCall(key: string, text: string, outcome: CallOutcome, now = new Date()): Promise<void> {
+  return updateEntry(key, (entry) => {
+    const current = cleanPipeline(entry.pipeline);
+    const stage = stageForOutcome(outcome);
+    const moves = stage !== null && stage !== (current?.status ?? 'new');
+    const call = newActivity('call', text, now, { outcome, ...(moves ? { stage } : {}) });
+    const pipeline = moves
+      ? cleanPipeline({ status: stage, notes: current?.notes ?? '', followUp: current?.followUp ?? null, updatedAt: now.toISOString() })
+      : current;
+    return { ...entry, pipeline: pipeline ?? undefined, activity: cleanActivity([...(entry.activity ?? []), call]) };
+  });
 }
 
 export function removeActivity(key: string, id: string): Promise<void> {

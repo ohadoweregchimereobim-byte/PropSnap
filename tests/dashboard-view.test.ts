@@ -98,8 +98,14 @@ describe('pipeline filters', () => {
     expect(ids(applyView(saved, { ...DEFAULT_VIEW, status: 'new' }, { today }))).toEqual(['1', '2', '3']);
   });
 
-  it('searches the notes', () => {
+  it('searches the summary and the notes and calls in the timeline', () => {
     expect(ids(applyView(saved, { ...DEFAULT_VIEW, search: 'quick sale' }, context))).toEqual(['1']);
+    const withTimeline = { today, userData: { ...userData, 'zoopla:2': { activity: [
+      { id: 'a', at: '2026-10-20T09:00:00Z', kind: 'note' as const, text: 'Roof needs replacing' },
+      { id: 'b', at: '2026-10-21T09:00:00Z', kind: 'call' as const, text: 'Vendor going abroad', outcome: 'spoke' as const },
+    ] } } };
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, search: 'roof' }, withTimeline))).toEqual(['2']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, search: 'abroad' }, withTimeline))).toEqual(['2']);
   });
 
   it('sorts by stage', () => {

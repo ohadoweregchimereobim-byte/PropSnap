@@ -172,7 +172,7 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     'Captured At',
     'Stage',
     'Follow Up',
-    'Notes',
+    'Summary',
     'Labels',
     'Hidden',
     'Last Call',

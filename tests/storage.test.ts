@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
 import { chooseAddress, clearListings, deleteListing, getListings, saveListing } from '../src/services/storage';
-import { addActivity, getAgentNotes, getAllUserData, getUserData, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
+import { addActivity, getAgentNotes, getAllUserData, getUserData, logCall, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
 import { newActivity } from '../src/services/crm';
 
 /**
@@ -183,6 +183,33 @@ describe('labels, hiding, activity and agent notes', () => {
     await updatePipeline('rightmove:1', { followUp: '2026-10-30' });
     const activity = (await getUserData('rightmove:1')).activity ?? [];
     expect(activity.map((a) => [a.kind, a.stage])).toEqual([['stage', 'viewing']]);
+  });
+
+  it('moves the stage when a call outcome is a stage, as one timeline entry', async () => {
+    await updatePipeline('rightmove:1', { status: 'viewing', notes: 'Keep me', followUp: '2026-10-30' });
+    await logCall('rightmove:1', 'They said yes', 'offer_accepted');
+    let data = await getUserData('rightmove:1');
+    expect(data.pipeline).toMatchObject({ status: 'accepted', notes: 'Keep me', followUp: '2026-10-30' });
+    expect(data.activity!.map((a) => [a.kind, a.stage ?? null, a.outcome ?? null])).toEqual([
+      ['stage', 'viewing', null],
+      ['call', 'accepted', 'offer_accepted'],
+    ]);
+
+    // A call that is not a stage, or repeats the stage, leaves the stage alone
+    await logCall('rightmove:1', '', 'spoke');
+    await logCall('rightmove:1', '', 'offer_accepted');
+    data = await getUserData('rightmove:1');
+    expect(data.pipeline!.status).toBe('accepted');
+    expect(data.activity!.slice(2).map((a) => [a.kind, a.stage ?? null])).toEqual([['call', null], ['call', null]]);
+  });
+
+  it('keeps a call when the stage is changed back straight after it', async () => {
+    await updatePipeline('rightmove:1', { status: 'viewing' });
+    await logCall('rightmove:1', 'Offer in', 'offer_made');
+    await updatePipeline('rightmove:1', { status: 'viewing' });
+    const data = await getUserData('rightmove:1');
+    expect(data.pipeline!.status).toBe('viewing');
+    expect(data.activity!.map((a) => [a.kind, a.stage ?? null])).toEqual([['stage', 'viewing'], ['call', 'offer'], ['stage', 'viewing']]);
   });
 
   it('saves labels and hidden, and removes them when cleared', async () => {

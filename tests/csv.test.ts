@@ -81,7 +81,7 @@ describe('listingsToCsv', () => {
     const cell = (name: string) => cells![headers!.indexOf(name)];
     expect(cell('Stage')).toBe('Viewing booked');
     expect(cell('Follow Up')).toBe('2026-10-30');
-    expect(cell('Notes')).toBe('Call =agent');
+    expect(cell('Summary')).toBe('Call =agent');
     expect(row(listing())['Stage']).toBe('New');
   });
 

@@ -177,8 +177,6 @@ export interface DealInputs {
   managementPct: number;
   /** Repairs and empty months, % of rent */
   maintenancePct: number;
-  /** Insurance, ground rent, service charge and anything else, £ per month */
-  otherMonthly: number;
   /** BRR only */
   refurbCost: number;
   valueAfterRefurb: number;
@@ -220,7 +218,6 @@ export const DEFAULT_DEAL_INPUTS: Omit<DealInputs, 'price' | 'region' | 'rentMon
   mortgageType: 'interest_only',
   managementPct: 10,
   maintenancePct: 8,
-  otherMonthly: 0,
   refurbCost: 0,
   refinanceLtvPct: 75,
   sourcingFee: 0,
@@ -243,7 +240,7 @@ export const DEFAULT_DEAL_INPUTS: Omit<DealInputs, 'price' | 'region' | 'rentMon
 
 const NUMBER_FIELDS = [
   'price', 'buyingCosts', 'depositPct', 'ratePct', 'termYears', 'rentMonthly', 'managementPct',
-  'maintenancePct', 'otherMonthly', 'refurbCost', 'valueAfterRefurb', 'refinanceLtvPct',
+  'maintenancePct', 'refurbCost', 'valueAfterRefurb', 'refinanceLtvPct',
   'sourcingFee', 'flipMonths', 'holdingMonthly', 'sellingFeePct', 'saleLegalFees', 'bridgingPct',
   'bridgingRatePct', 'bridgingFeesPct', 'hmoRooms', 'hmoRoomRent', 'hmoBillsMonthly', 'hmoManagementPct',
   'hmoLicenceCost', 'hmoLicenceYears',
@@ -315,13 +312,18 @@ export function dealInputsFor(
     if (saved.mortgageType === 'interest_only' || saved.mortgageType === 'repayment') inputs.mortgageType = saved.mortgageType;
     if (saved.sourcingFeeType === 'fixed' || saved.sourcingFeeType === 'pct') inputs.sourcingFeeType = saved.sourcingFeeType;
     if (saved.customCosts !== undefined) inputs.customCosts = cleanCustomCosts(saved.customCosts);
+    // Before 0.4.1 monthly extras were one "Other costs" figure: it becomes a named monthly cost
+    const other = (saved as Record<string, unknown>).otherMonthly;
+    if (typeof other === 'number' && Number.isFinite(other) && other > 0) {
+      inputs.customCosts = cleanCustomCosts([...inputs.customCosts, { name: 'Other costs', amount: other, when: 'monthly' }]);
+    }
   }
 
   return { inputs, regionSure: sure || saved?.region === 'england' || saved?.region === 'wales' };
 }
 
 function runningCosts(i: DealInputs): number {
-  return (i.rentMonthly * (i.managementPct + i.maintenancePct)) / 100 + i.otherMonthly + customCostTotals(i.customCosts).monthly;
+  return (i.rentMonthly * (i.managementPct + i.maintenancePct)) / 100 + customCostTotals(i.customCosts).monthly;
 }
 
 export interface BuyToLetResult {
@@ -469,7 +471,7 @@ export function flip(i: DealInputs): FlipResult {
 export interface HmoResult {
   tax: PurchaseTax;
   rentMonthly: number;
-  /** Management, repairs and empty rooms, bills, other costs, the licence spread over its years, monthly custom costs */
+  /** Management, repairs and empty rooms, bills, the licence spread over its years, and your monthly costs */
   runningCostsMonthly: number;
   billsMonthly: number;
   licenceMonthly: number;
@@ -487,15 +489,15 @@ export interface HmoResult {
 
 /**
  * A house let room by room, with bills paid by the landlord. Uses the
- * purchase and mortgage above, the works as the conversion cost, and the
- * repairs % and other costs from the single let.
+ * purchase and mortgage above, the works as the conversion cost, the
+ * repairs % from the single let, and your own monthly costs.
  */
 export function hmo(i: DealInputs): HmoResult {
   const tax = purchaseTax(i.price, i.region, i.buyer);
   const rentMonthly = i.hmoRooms * i.hmoRoomRent;
   const licenceMonthly = i.hmoLicenceCost > 0 ? i.hmoLicenceCost / (Math.max(1, i.hmoLicenceYears) * 12) : 0;
   const runningCostsMonthly = (rentMonthly * (i.hmoManagementPct + i.maintenancePct)) / 100
-    + i.hmoBillsMonthly + i.otherMonthly + licenceMonthly + customCostTotals(i.customCosts).monthly;
+    + i.hmoBillsMonthly + licenceMonthly + customCostTotals(i.customCosts).monthly;
   const deposit = (i.price * i.depositPct) / 100;
   const loan = Math.max(0, i.price - deposit);
   const mortgageMonthly = monthlyMortgage(loan, i.ratePct, i.termYears, i.mortgageType);

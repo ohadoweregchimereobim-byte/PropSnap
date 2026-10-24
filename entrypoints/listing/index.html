@@ -67,8 +67,9 @@
         <button id="pipelineClearDate" class="btn btn-small" type="button">Clear date</button>
         <span id="pipelineDue" class="due" hidden></span>
       </div>
-      <label class="notes-label" for="pipelineNotes">Notes</label>
-      <textarea id="pipelineNotes" rows="4" maxlength="5000" placeholder="Viewing feedback, what the agent said, offers made…"></textarea>
+      <label class="notes-label" for="pipelineNotes">Summary</label>
+      <textarea id="pipelineNotes" rows="3" maxlength="5000" placeholder="The main points, kept up to date. For example: vendor wants a quick sale, roof needs work, offer up to £280,000"></textarea>
+      <p class="hint">For dated notes and calls, use the timeline below.</p>
       <p id="pipelineSaved" class="hint"></p>
 
       <div class="labels-row">
@@ -234,8 +235,7 @@
             <label>Rent (£ a month) <input type="number" data-field="rentMonthly" min="0" step="25" /></label>
             <label>Letting agent (% of rent) <input type="number" data-field="managementPct" min="0" max="100" step="0.5" /></label>
             <label>Repairs and empty months (% of rent) <input type="number" data-field="maintenancePct" min="0" max="100" step="0.5" /></label>
-            <label>Other costs (£ a month) <input type="number" data-field="otherMonthly" min="0" step="5" /></label>
-            <p class="hint">Other costs: insurance, ground rent, service charge, licence fees.</p>
+            <p class="hint">Insurance, ground rent, service charge and other costs: add them under "Sourcing fee and your own costs" below.</p>
           </fieldset>
 
           <fieldset>
@@ -266,7 +266,7 @@
             <label>Management (% of rent) <input type="number" data-field="hmoManagementPct" min="0" max="100" step="0.5" /></label>
             <label>Licence fee (£) <input type="number" data-field="hmoLicenceCost" min="0" step="50" /></label>
             <label>Licence lasts (years) <input type="number" data-field="hmoLicenceYears" min="1" step="1" /></label>
-            <p class="hint">Bills: energy, water, broadband, council tax and TV licence. Uses the purchase and mortgage above, and the repairs % and other costs from the single let. The licence fee is spread over the years it lasts.</p>
+            <p class="hint">Bills: energy, water, broadband, council tax and TV licence. Uses the purchase and mortgage above, the repairs % from the single let, and your own costs below. The licence fee is spread over the years it lasts.</p>
           </fieldset>
 
           <fieldset>
@@ -282,7 +282,7 @@
             </label>
             <div id="customCosts" class="custom-costs"></div>
             <button id="addCost" class="btn btn-small" type="button">Add a cost</button>
-            <p class="hint">Added to every strategy: one-off costs with the purchase, monthly costs with the running costs.</p>
+            <p class="hint">For example insurance, ground rent, service charge or a gas safety check. Added to every strategy: one-off costs with the purchase, monthly costs with the running costs.</p>
           </fieldset>
         </form>
 
