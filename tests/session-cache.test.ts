@@ -49,6 +49,32 @@ describe('session cache', () => {
     expect(Object.keys(data()).sort()).toEqual(['propsnap_cache:long', 'propsnap_cache:new']);
   });
 
+  it('starts again when the store is full', async () => {
+    const data = fakeSession();
+    await writeCache('old', 1, HOUR);
+    const session = (globalThis as any).chrome.storage.session;
+    const set = session.set;
+    let full = true;
+    session.set = async (items: Record<string, unknown>) => {
+      if (full) { full = false; throw new Error('QUOTA_BYTES quota exceeded'); }
+      return set(items);
+    };
+    await writeCache('new', 2, HOUR);
+    expect(Object.keys(data())).toEqual(['propsnap_cache:new']);
+  });
+
+  it('keeps no certificate that came back empty', async () => {
+    fakeSession();
+    const fetchMock = vi.fn(async (url: string) => url.includes('/search')
+      ? new Response(JSON.stringify({ data: [flat(1), flat(2)] }))
+      : new Response(JSON.stringify({ unexpected: true })));
+    vi.stubGlobal('fetch', fetchMock);
+    const lookups = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/certificate')).length;
+    await enrichWithEpc('token', listing());
+    await enrichWithEpc('token', listing());
+    expect(lookups()).toBe(4);
+  });
+
   it('does nothing where there is no session storage', async () => {
     vi.stubGlobal('chrome', undefined);
     await writeCache('a', 1, HOUR);
@@ -99,6 +125,15 @@ describe('kept sold prices', () => {
     }] },
   };
   const area = { postcode: 'CF24 2QH', street: null, outcode: null };
+
+  it('are the same area however the postcode is written', async () => {
+    fakeSession();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer)));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchSoldPricesCached(area);
+    await fetchSoldPricesCached({ ...area, postcode: 'cf242qh' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   it('come from the cache the second time, and Refresh asks again', async () => {
     fakeSession();

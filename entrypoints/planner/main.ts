@@ -62,7 +62,11 @@ async function init() {
     plan.start = startInput.value;
     renderLinks();
     clearTimeout(startTimer);
-    startTimer = setTimeout(save, 400);
+    startTimer = setTimeout(() => { startTimer = undefined; save(); }, 400);
+  });
+  // Save a start still waiting when the tab is closed or hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && startTimer) { clearTimeout(startTimer); startTimer = undefined; save(); }
   });
   minutesInput.addEventListener('change', () => {
     const m = Number(minutesInput.value);

@@ -446,9 +446,9 @@ async function loadSold(fresh = false) {
     if (request !== soldRequest) return;
     sales = found.sales;
     // Say when a kept answer is shown, so the user knows Refresh asks again
-    const minutes = Math.round((Date.now() - found.at) / 60_000);
+    const minutes = Math.floor((Date.now() - found.at) / 60_000);
     if (minutes >= 1) {
-      $('soldWhere').textContent = `${soldWhereText} Fetched ${minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`} ago; Refresh asks again.`;
+      $('soldWhere').textContent = `${soldWhereText} Fetched ${minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`} ago; Refresh asks again.`;
     }
     renderSold();
   } catch (error: any) {

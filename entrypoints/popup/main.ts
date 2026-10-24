@@ -50,11 +50,16 @@ async function init() {
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') });
   });
-  settingsBtn.addEventListener('click', toggleSettings);
-  saveSettingsBtn.addEventListener('click', handleSaveSettings);
+
+  // The settings form only works once it holds the saved settings, so Save
+  // can never write an empty token over the real one
+  const settingsReady = loadSettings().then(() => {
+    settingsBtn.addEventListener('click', toggleSettings);
+    saveSettingsBtn.addEventListener('click', handleSaveSettings);
+  });
 
   // The Capture button first; the count and settings fill in alongside
-  await Promise.all([checkCurrentTab(), updateListingCount(), loadSettings()]);
+  await Promise.all([checkCurrentTab(), updateListingCount(), settingsReady]);
 }
 
 /**

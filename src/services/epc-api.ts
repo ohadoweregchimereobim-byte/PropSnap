@@ -261,7 +261,8 @@ export async function fetchCertificateDetails(
     if (!response.ok) return null;
 
     const details = readDetails(await response.json());
-    await writeCache(cacheKey, details, CERTIFICATE_CACHE_MS);
+    // An answer with none of the fields may be a passing fault; ask again next time
+    if (Object.keys(details).length > 0) await writeCache(cacheKey, details, CERTIFICATE_CACHE_MS);
     return details;
   } catch (error) {
     // A lookup that hangs would make every capture wait 10 s per pair, so pause them too

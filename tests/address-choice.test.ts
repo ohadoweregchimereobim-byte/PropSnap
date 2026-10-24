@@ -114,8 +114,15 @@ describe('reuseKnownAddress', () => {
     expect(reuseKnownAddress(undefined, fresh())).toBeNull();
   });
 
-  it('matches the postcode however it is spaced', () => {
-    expect(reuseKnownAddress(exact, fresh({ postcode: 'cf149bp' }))).not.toBeNull();
+  it('matches the postcode and address however they are spaced', () => {
+    expect(reuseKnownAddress(exact, fresh({ postcode: 'cf149bp', displayAddress: 'Lyric Way,  Thornhill, Cardiff CF14' }))).not.toBeNull();
+  });
+
+  it('matches again when the details the match used have changed', () => {
+    expect(reuseKnownAddress(exact, fresh({ floorAreaSqm: 72 }))).toBeNull();
+    expect(reuseKnownAddress(exact, fresh({ bedrooms: 3 }))).toBeNull();
+    expect(reuseKnownAddress(exact, fresh({ propertyType: 'semi-detached' }))).toBeNull();
+    expect(reuseKnownAddress(exact, fresh({ numberFromText: '12' }))).toBeNull();
   });
 });
 

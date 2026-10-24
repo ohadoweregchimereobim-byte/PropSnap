@@ -31,22 +31,41 @@ export async function readCache<T>(key: string): Promise<{ value: T; at: number 
   }
 }
 
-/** Keep `value` for `key` for maxAgeMs, and drop entries that are too old while at it */
+// Reading every entry to find old ones costs time, so do it at most this often
+const PRUNE_EVERY_MS = 10 * 60_000;
+let lastPrune = 0;
+
+/** Remove old entries; with `all`, every entry (when the store is full) */
+async function prune(store: chrome.storage.StorageArea, all = false): Promise<void> {
+  lastPrune = Date.now();
+  const entries = await store.get(null);
+  const doomed = Object.entries(entries)
+    .filter(([k, e]) => {
+      if (!k.startsWith(PREFIX)) return false;
+      const until = (e as Entry<unknown> | undefined)?.until;
+      return all || !(typeof until === 'number' && Date.now() < until);
+    })
+    .map(([k]) => k);
+  if (doomed.length) await store.remove(doomed);
+}
+
+/** Keep `value` for `key` for maxAgeMs, dropping old entries now and then */
 export async function writeCache<T>(key: string, value: T, maxAgeMs: number): Promise<void> {
+  const store = session();
+  if (!store) return;
+  const now = Date.now();
+  const item = { [PREFIX + key]: { at: now, until: now + maxAgeMs, value } satisfies Entry<T> };
   try {
-    const store = session();
-    if (!store) return;
-    const all = await store.get(null);
-    const stale = Object.entries(all)
-      .filter(([k, e]) => {
-        const until = (e as Entry<unknown> | undefined)?.until;
-        return k.startsWith(PREFIX) && !(typeof until === 'number' && Date.now() < until);
-      })
-      .map(([k]) => k);
-    if (stale.length) await store.remove(stale);
-    const now = Date.now();
-    await store.set({ [PREFIX + key]: { at: now, until: now + maxAgeMs, value } satisfies Entry<T> });
+    if (now - lastPrune > PRUNE_EVERY_MS) await prune(store);
+    await store.set(item);
   } catch {
-    // A full or missing cache only costs a new request next time
+    // Most likely the store is full: start the cache again and try once more.
+    // If that fails too, the only cost is a new request next time.
+    try {
+      await prune(store, true);
+      await store.set(item);
+    } catch {
+      // Give up quietly
+    }
   }
 }

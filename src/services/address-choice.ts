@@ -39,18 +39,29 @@ export function keepUserChoice(previous: PropertyListing | undefined, next: Prop
   };
 }
 
+/** What the EPC match is worked out from; when any of it changes, match again */
+function matchEvidence(l: PropertyListing): string {
+  return JSON.stringify([
+    normalisePostcode(l.postcode ?? ''),
+    l.displayAddress.trim().toLowerCase().replace(/\s+/g, ' '),
+    l.bedrooms ?? null,
+    (l.propertyType ?? '').toLowerCase(),
+    l.floorAreaSqm ?? null,
+    l.numberFromText ?? null,
+  ]);
+}
+
 /**
  * A new capture of a listing whose home is already known (an exact match, or
- * picked by the user) for the same postcode and listing address: the EPC
- * register would only say the same again, so the saved address is used and
- * the capture skips the lookup. Null when the lookup should run.
+ * picked by the user) with the same postcode, address and details the match
+ * used: the EPC register would only say the same again, so the saved address
+ * is used and the capture skips the lookup. Null when the lookup should run.
  */
 export function reuseKnownAddress(previous: PropertyListing | undefined, next: PropertyListing): PropertyListing | null {
   if (!previous?.fullAddress || next.fullAddress) return null;
   if (previous.addressConfidence !== 'exact' && previous.addressConfidence !== 'user_choice') return null;
   if (!previous.postcode || !next.postcode) return null;
-  if (normalisePostcode(previous.postcode) !== normalisePostcode(next.postcode)) return null;
-  if (previous.displayAddress.trim().toLowerCase() !== next.displayAddress.trim().toLowerCase()) return null;
+  if (matchEvidence(previous) !== matchEvidence(next)) return null;
 
   return {
     ...next,

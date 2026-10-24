@@ -219,7 +219,9 @@ export async function fetchSoldPricesCached(
   where: SoldArea,
   { fresh = false }: { fresh?: boolean } = {},
 ): Promise<{ sales: SoldPrice[]; at: number }> {
-  const key = `sold:${where.postcode ?? ''}|${where.street ?? ''}|${where.outcode ?? ''}`;
+  // The same area however it is spelled
+  const tidy = (v: string | null) => (v ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const key = `sold:${formatPostcode(where.postcode) ?? ''}|${tidy(where.street)}|${tidy(where.outcode)}`;
   if (!fresh) {
     const kept = await readCache<SoldPrice[]>(key);
     if (kept) return { sales: kept.value, at: kept.at };
