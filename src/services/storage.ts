@@ -3,6 +3,7 @@ import type { EpcEnergy } from './epc-energy';
 import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, statusLabel } from './pipeline';
+import { cleanActivity, cleanLabels, lastCall, outcomeLabel } from './crm';
 import { priceChange, withPriceHistory } from './price-history';
 import { withLock } from './storage-lock';
 
@@ -172,11 +173,16 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     'Stage',
     'Follow Up',
     'Notes',
+    'Labels',
+    'Hidden',
+    'Last Call',
   ];
 
   const rows = listings.map((l) => {
     const change = priceChange(l);
-    const pipeline = cleanPipeline(userData[listingKey(l)]?.pipeline);
+    const own = userData[listingKey(l)];
+    const pipeline = cleanPipeline(own?.pipeline);
+    const call = lastCall(cleanActivity(own?.activity));
     return [
     l.source,
     l.listingId,
@@ -213,6 +219,10 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     statusLabel(pipeline?.status),
     pipeline?.followUp ?? '',
     pipeline?.notes ?? '',
+    cleanLabels(own?.labels).join('; '),
+    own?.hidden ? 'yes' : '',
+    // "2026-10-20 Spoke to the agent: vendor flexible"
+    call ? `${call.at.slice(0, 10)} ${outcomeLabel(call.outcome)}${call.text ? `: ${call.text}` : ''}` : '',
   ];
   });
 

@@ -111,9 +111,30 @@ describe('pipeline filters', () => {
   });
 });
 
+describe('hidden homes and labels', () => {
+  const userData = {
+    'rightmove:1': { hidden: true, labels: ['BRR'] },
+    'zoopla:2': { labels: ['Potential flip', 'Motivated seller'] },
+  };
+  const context = { userData, today: '2026-10-23' };
+
+  it('leaves hidden homes out unless asked', () => {
+    expect(ids(applyView(saved, DEFAULT_VIEW, context))).toEqual(['2', '3']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, hidden: 'show' }, context))).toEqual(['1', '2', '3']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, hidden: 'only' }, context))).toEqual(['1']);
+    expect(summarise(saved, context).hidden).toBe(1);
+  });
+
+  it('filters and searches by label, ignoring case', () => {
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, label: 'potential FLIP' }, context))).toEqual(['2']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, search: 'motivated' }, context))).toEqual(['2']);
+    expect(ids(applyView(saved, { ...DEFAULT_VIEW, label: 'BRR' }, context))).toEqual([]);
+  });
+});
+
 describe('summarise and matchGroup', () => {
   it('counts each match group', () => {
-    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0, active: 0, due: 0 });
+    expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0, active: 0, due: 0, hidden: 0 });
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road', addressConfidence: 'user_choice' }))).toBe('user_choice');
     expect(matchGroup(listing('x', { fullAddress: '1 Maple Road' }))).toBe('best_guess');
   });

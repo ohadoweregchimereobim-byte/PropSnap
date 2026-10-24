@@ -57,6 +57,15 @@
         <option value="active">Active deals</option>
         <option value="due">Follow-ups due</option>
       </select>
+      <select id="labelFilter" aria-label="Label">
+        <option value="all">All labels</option>
+      </select>
+      <select id="hiddenFilter" aria-label="Hidden homes">
+        <option value="hide">Leave out hidden homes</option>
+        <option value="show">Show hidden homes too</option>
+        <option value="only">Only hidden homes</option>
+      </select>
+      <label class="group-toggle"><input type="checkbox" id="groupByAgent" /> Group by agent</label>
       <span id="shownCount" class="shown"></span>
     </section>
 

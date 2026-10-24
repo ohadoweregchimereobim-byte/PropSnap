@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
 import { chooseAddress, clearListings, deleteListing, getListings, saveListing } from '../src/services/storage';
-import { getAllUserData, getUserData, saveDealInputs, updatePipeline } from '../src/services/user-data';
+import { addActivity, getAgentNotes, getAllUserData, getUserData, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
+import { newActivity } from '../src/services/crm';
 
 /**
  * A stand-in for chrome.storage.local. Every call waits a tick, like the real
@@ -159,3 +160,56 @@ describe('saving the deal pipeline', () => {
     expect(data.pipeline?.followUp).toBe('2026-11-02');
   });
 });
+
+describe('labels, hiding, activity and agent notes', () => {
+  it('keeps a stage changed back later in the timeline', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-20T10:00:00Z'));
+      await updatePipeline('rightmove:1', { status: 'offer' });
+      vi.setSystemTime(new Date('2026-10-21T10:00:00Z'));
+      await updatePipeline('rightmove:1', { status: 'new' });
+      // Back to New a day later is history, not a mis-click
+      expect((await getUserData('rightmove:1')).activity?.map((a) => a.stage)).toEqual(['offer', 'new']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records a stage change in the timeline, but not other pipeline saves', async () => {
+    await updatePipeline('rightmove:1', { notes: 'hello' });
+    await updatePipeline('rightmove:1', { status: 'viewing' });
+    await updatePipeline('rightmove:1', { status: 'viewing' });
+    await updatePipeline('rightmove:1', { followUp: '2026-10-30' });
+    const activity = (await getUserData('rightmove:1')).activity ?? [];
+    expect(activity.map((a) => [a.kind, a.stage])).toEqual([['stage', 'viewing']]);
+  });
+
+  it('saves labels and hidden, and removes them when cleared', async () => {
+    await setLabels('rightmove:1', ['BRR', 'brr', 'HMO']);
+    await setHidden('rightmove:1', true);
+    expect(await getUserData('rightmove:1')).toEqual({ labels: ['BRR', 'HMO'], hidden: true });
+    await setLabels('rightmove:1', []);
+    await setHidden('rightmove:1', false);
+    expect(await getAllUserData()).toEqual({});
+  });
+
+  it('loses neither of two notes added at the same moment, and deletes one', async () => {
+    const a = newActivity('note', 'first', new Date('2026-10-23T09:00:00Z'));
+    const b = newActivity('call', 'second', new Date('2026-10-23T09:01:00Z'), { outcome: 'spoke' });
+    await Promise.all([addActivity('rightmove:1', a), addActivity('rightmove:1', b)]);
+    expect((await getUserData('rightmove:1')).activity?.map((x) => x.text)).toEqual(['first', 'second']);
+    await removeActivity('rightmove:1', a.id);
+    expect((await getUserData('rightmove:1')).activity?.map((x) => x.text)).toEqual(['second']);
+  });
+
+  it('keeps agent notes apart, and Clear all removes them', async () => {
+    await saveAgentNote('example estates|roath', 'Ask for Sam');
+    await saveAgentNote('zeta|', 'Slow to reply');
+    await saveAgentNote('zeta|', '  ');
+    expect(Object.keys(await getAgentNotes())).toEqual(['example estates|roath']);
+    await clearListings();
+    expect(await getAgentNotes()).toEqual({});
+  });
+});
+

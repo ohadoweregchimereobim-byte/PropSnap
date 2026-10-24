@@ -12,7 +12,7 @@
       <a href="./dashboard.html" class="btn">← Dashboard</a>
       <a id="openListing" class="btn" target="_blank" rel="noopener noreferrer" hidden>Open listing</a>
       <span id="reportControls" class="nav-report" hidden>
-        <label class="report-notes"><input type="checkbox" id="reportNotes" /> Include my stage and notes</label>
+        <label class="report-notes"><input type="checkbox" id="reportNotes" /> Include my stage, notes, labels and timeline</label>
         <button id="reportBtn" class="btn btn-primary" type="button">Save report as PDF</button>
       </span>
     </nav>
@@ -44,6 +44,38 @@
       <label class="notes-label" for="pipelineNotes">Notes</label>
       <textarea id="pipelineNotes" rows="4" maxlength="5000" placeholder="Viewing feedback, what the agent said, offers made…"></textarea>
       <p id="pipelineSaved" class="hint"></p>
+
+      <div class="labels-row">
+        <span class="row-label">Labels</span>
+        <span id="labelChips" class="chips"></span>
+        <input id="labelInput" list="labelOptions" maxlength="30" placeholder="Add a label" aria-label="Add a label" />
+        <datalist id="labelOptions"></datalist>
+        <button id="labelAdd" class="btn btn-small" type="button">Add</button>
+        <button id="hideBtn" class="btn btn-small" type="button">Hide this home</button>
+      </div>
+      <p id="hiddenNote" class="hint" hidden>Hidden: the dashboard leaves this home out unless you choose to show hidden homes.</p>
+
+      <div class="activity">
+        <h3>Timeline</h3>
+        <p id="lastCallLine" class="hint"></p>
+        <textarea id="activityText" rows="2" maxlength="2000" aria-label="What happened" placeholder="What happened? For example: agent says the vendor has found a new home"></textarea>
+        <div class="activity-row">
+          <button id="addNote" class="btn btn-small" type="button">Add note</button>
+          <span class="or">or</span>
+          <select id="callOutcome" aria-label="Call outcome"></select>
+          <button id="logCall" class="btn btn-small btn-primary" type="button">Log call</button>
+        </div>
+        <ol id="timeline" class="timeline"></ol>
+      </div>
+    </section>
+
+    <section id="agent" class="agent" hidden aria-labelledby="agentTitle">
+      <h2 id="agentTitle">Agent</h2>
+      <p id="agentLine" class="agent-line"></p>
+      <p id="agentOthers" class="hint"></p>
+      <label class="notes-label" for="agentNote">Notes about this agent (shown on all their listings)</label>
+      <textarea id="agentNote" rows="2" maxlength="2000" placeholder="For example: ask for Sam, replies fast on email"></textarea>
+      <p id="agentSaved" class="hint"></p>
     </section>
 
     <section id="energy" class="energy" hidden aria-labelledby="energyTitle">

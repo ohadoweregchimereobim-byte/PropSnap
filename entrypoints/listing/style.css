@@ -392,6 +392,164 @@ body {
   color: #1e40af;
 }
 
+/* Labels, hide, timeline */
+.labels-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.row-label {
+  color: #334155;
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chip button {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#labelInput {
+  width: 160px;
+}
+
+.pipeline [hidden],
+.agent [hidden] {
+  display: none;
+}
+
+.activity {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.activity h3 {
+  font-size: 14px;
+}
+
+.activity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0 10px;
+  font-size: 13px;
+}
+
+.or {
+  color: #94a3b8;
+}
+
+.timeline {
+  list-style: none;
+  font-size: 13px;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.timeline time {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.timeline .t-title {
+  font-weight: 600;
+}
+
+.timeline .t-text {
+  white-space: pre-wrap;
+  color: #334155;
+}
+
+.timeline .t-price .t-title,
+.timeline .t-captured .t-title {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.timeline .t-call .t-title {
+  color: #1d4ed8;
+}
+
+.timeline .t-stage .t-title {
+  color: #5b21b6;
+}
+
+.timeline button {
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.timeline button:hover {
+  color: #b91c1c;
+}
+
+/* Agent */
+.agent {
+  margin-bottom: 28px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.agent h2 {
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.agent-line {
+  font-weight: 600;
+}
+
+.agent-line a {
+  color: #1d4ed8;
+}
+
+.agent textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
 /* Energy rating */
 .energy {
   margin-bottom: 28px;

@@ -8,7 +8,38 @@
 import type { PropertyListing } from '../../src/adapters/types';
 import { getListings, LISTINGS_KEY } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
-import { getUserData, listingKey, saveDealInputs, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import {
+  addActivity,
+  getAgentNotes,
+  getAllUserData,
+  getUserData,
+  listingKey,
+  removeActivity,
+  saveAgentNote,
+  saveDealInputs,
+  setHidden,
+  setLabels,
+  updatePipeline,
+  USER_DATA_KEY,
+  type UserDataMap,
+} from '../../src/services/user-data';
+import {
+  addLabel,
+  agentKey,
+  AGENTS_KEY,
+  allLabels,
+  CALL_OUTCOMES,
+  cleanActivity,
+  cleanLabels,
+  lastCall,
+  newActivity,
+  outcomeLabel,
+  removeLabel,
+  timeline,
+  whenText,
+  type AgentNotes,
+  type CallOutcome,
+} from '../../src/services/crm';
 import { cleanPipeline, followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { safeLink } from '../../src/services/dashboard-view';
 import {
@@ -30,6 +61,11 @@ const fields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectEle
 
 const key = new URLSearchParams(location.search).get('key') ?? '';
 let listing: PropertyListing | null = null;
+// Every saved listing and the user's data for all of them, for labels and the agent box
+let allListings: PropertyListing[] = [];
+let allUserData: UserDataMap = {};
+let agentNotes: AgentNotes = {};
+let agentTimer: ReturnType<typeof setTimeout> | undefined;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let pipelineTimer: ReturnType<typeof setTimeout> | undefined;
 // Pipeline fields changed here and not saved yet. Only these are saved, so a
@@ -75,6 +111,7 @@ async function init() {
   });
 
   setUpPipeline();
+  setUpCrm();
   $('reportBtn').addEventListener('click', saveReport);
   $('energyLoad').addEventListener('click', loadEnergy);
   $('typeFilter').addEventListener('change', renderSold);
@@ -93,7 +130,12 @@ async function init() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (LISTINGS_KEY in changes) loadListing(false);
+    if (AGENTS_KEY in changes) {
+      getAgentNotes().then((notes) => { agentNotes = notes; fillAgentNote(); showCrm(); });
+    }
     if (USER_DATA_KEY in changes) {
+      allUserData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
+      showCrm();
       const pipelineIn = (value: unknown) => JSON.stringify((value as UserDataMap | undefined)?.[key]?.pipeline ?? null);
       const { oldValue, newValue } = changes[USER_DATA_KEY]!;
       // Calculator saves change user data too; only a new pipeline is shown
@@ -108,6 +150,7 @@ async function init() {
     if (document.visibilityState !== 'hidden') return;
     if (unsaved.size) { clearTimeout(pipelineTimer); saveThePipeline(); }
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; save(); }
+    if (agentTimer) { clearTimeout(agentTimer); saveTheAgentNote(); }
   });
 
   await loadListing(true);
@@ -115,7 +158,8 @@ async function init() {
 
 async function loadListing(firstLoad: boolean) {
   try {
-    const found = (await getListings()).find((l) => listingKey(l) === key) ?? null;
+    allListings = await getListings();
+    const found = allListings.find((l) => listingKey(l) === key) ?? null;
     const before = listing;
     listing = found;
     showHeader();
@@ -133,7 +177,10 @@ async function loadListing(firstLoad: boolean) {
     if (firstLoad) {
       setTypeFilter();
       fillPipeline(cleanPipeline((await getUserData(key)).pipeline));
+      [allUserData, agentNotes] = await Promise.all([getAllUserData(), getAgentNotes()]);
+      fillAgentNote();
     }
+    showCrm();
     if (firstLoad || before?.postcode !== listing.postcode || before?.fullAddress !== listing.fullAddress) {
       loadSold();
     } else {
@@ -150,6 +197,7 @@ function showHeader() {
   $('calculator').hidden = missing;
   $('sold').hidden = missing;
   $('pipeline').hidden = missing;
+  $('agent').hidden = missing || !agentKey(listing ?? { agentName: null, agentBranch: null });
   $('energy').hidden = missing;
   $('reportControls').hidden = missing;
   if (!listing) {
@@ -268,6 +316,158 @@ async function saveThePipeline() {
     $('pipelineSaved').textContent = `Could not save: ${error.message}`;
   } finally {
     for (const field of fields) saving.delete(field);
+  }
+}
+
+function setUpCrm() {
+  $('callOutcome').replaceChildren(...CALL_OUTCOMES.map((o) => new Option(o.label, o.value)));
+
+  const addTyped = async () => {
+    const input = $('labelInput') as HTMLInputElement;
+    const labels = addLabel(cleanLabels(allUserData[key]?.labels), input.value, allLabels(Object.values(allUserData).map((d) => cleanLabels(d.labels))));
+    input.value = '';
+    await saveOr(() => setLabels(key, labels), 'Could not save the label');
+  };
+  $('labelAdd').addEventListener('click', addTyped);
+  $('labelInput').addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Enter') { event.preventDefault(); addTyped(); }
+  });
+  $('hideBtn').addEventListener('click', () => saveOr(() => setHidden(key, !allUserData[key]?.hidden), 'Could not save'));
+
+  const log = (kind: 'note' | 'call') => async () => {
+    const box = $('activityText') as HTMLTextAreaElement;
+    if (kind === 'note' && !box.value.trim()) { box.focus(); return; }
+    const outcome = ($('callOutcome') as HTMLSelectElement).value as CallOutcome;
+    const entry = newActivity(kind, box.value, new Date(), kind === 'call' ? { outcome } : {});
+    await saveOr(async () => { await addActivity(key, entry); box.value = ''; }, 'Could not save to the timeline');
+  };
+  $('addNote').addEventListener('click', log('note'));
+  $('logCall').addEventListener('click', log('call'));
+
+  $('agentNote').addEventListener('input', () => {
+    clearTimeout(agentTimer);
+    agentTimer = setTimeout(saveTheAgentNote, 600);
+  });
+}
+
+async function saveOr(action: () => Promise<void>, failure: string) {
+  try {
+    await action();
+  } catch (error: any) {
+    setStatus(`${failure}: ${error.message}`);
+  }
+}
+
+/** Labels, hidden, the timeline and the agent box, from the saved user data */
+function showCrm() {
+  if (!listing) return;
+  const entry = allUserData[key] ?? {};
+  const labels = cleanLabels(entry.labels);
+
+  $('labelChips').replaceChildren(...labels.map((label) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = label;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.title = `Remove ${label}`;
+    remove.setAttribute('aria-label', `Remove label ${label}`);
+    remove.addEventListener('click', () => saveOr(() => setLabels(key, removeLabel(labels, label)), 'Could not save'));
+    chip.append(remove);
+    return chip;
+  }));
+  const offered = allLabels(Object.values(allUserData).map((d) => cleanLabels(d.labels)))
+    .filter((l) => !labels.some((x) => x.toLowerCase() === l.toLowerCase()));
+  $('labelOptions').replaceChildren(...offered.map((l) => new Option(l)));
+
+  $('hideBtn').textContent = entry.hidden ? 'Unhide' : 'Hide this home';
+  $('hiddenNote').hidden = !entry.hidden;
+
+  const activity = cleanActivity(entry.activity);
+  const now = new Date();
+  const call = lastCall(activity);
+  $('lastCallLine').textContent = call ? `Last call ${whenText(call.at, now)}: ${outcomeLabel(call.outcome)}` : 'No calls logged yet.';
+
+  $('timeline').replaceChildren(...timeline(activity, listing.priceHistory).map((item) => {
+    const li = document.createElement('li');
+    li.className = `t-${item.kind}`;
+    const time = document.createElement('time');
+    time.dateTime = item.at;
+    time.textContent = new Date(item.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const body = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 't-title';
+    title.textContent = item.title;
+    body.append(title);
+    if (item.text) {
+      const text = document.createElement('div');
+      text.className = 't-text';
+      text.textContent = item.text;
+      body.append(text);
+    }
+    li.append(time, body);
+    if (item.id) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '✕';
+      remove.title = 'Delete this entry';
+      remove.setAttribute('aria-label', 'Delete this entry');
+      remove.addEventListener('click', () => {
+        if (confirm('Delete this entry from the timeline?')) saveOr(() => removeActivity(key, item.id!), 'Could not delete');
+      });
+      li.append(remove);
+    } else {
+      li.append(document.createElement('span'));
+    }
+    return li;
+  }));
+
+  showAgent();
+}
+
+/** The agent's name and phone, their other saved listings and the last call to them */
+function showAgent() {
+  if (!listing) return;
+  const agent = agentKey(listing);
+  if (!agent) return;
+  const line = $('agentLine');
+  line.replaceChildren(`${listing.agentName}${listing.agentBranch ? `, ${listing.agentBranch}` : ''}`);
+  if (listing.agentPhone) {
+    const tel = document.createElement('a');
+    tel.href = `tel:${listing.agentPhone.replace(/[^\d+]/g, '')}`;
+    tel.textContent = listing.agentPhone;
+    line.append(' · ', tel);
+  }
+
+  const theirs = allListings.filter((l) => agentKey(l) === agent);
+  const others = theirs.length - 1;
+  const calls = theirs.map((l) => lastCall(cleanActivity(allUserData[listingKey(l)]?.activity))).filter((c) => c !== null);
+  const latest = calls.reduce<(typeof calls)[number] | null>((a, c) => (!a || c!.at > a.at ? c : a), null);
+  $('agentOthers').textContent = [
+    others > 0 ? `${others} other saved listing${others === 1 ? '' : 's'} from this agent.` : 'No other saved listings from this agent.',
+    latest ? `Last call to them ${whenText(latest.at, new Date())}.` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function fillAgentNote() {
+  if (!listing) return;
+  const agent = agentKey(listing);
+  const box = $('agentNote') as HTMLTextAreaElement;
+  // Leave alone what the user is still typing here
+  if (!agent || agentTimer || document.activeElement === box) return;
+  box.value = agentNotes[agent]?.note ?? '';
+}
+
+async function saveTheAgentNote() {
+  agentTimer = undefined;
+  const agent = listing && agentKey(listing);
+  if (!agent) return;
+  try {
+    await saveAgentNote(agent, ($('agentNote') as HTMLTextAreaElement).value);
+    $('agentSaved').textContent = 'Saved for every listing from this agent';
+  } catch (error: any) {
+    $('agentSaved').textContent = `Could not save: ${error.message}`;
   }
 }
 
@@ -546,6 +746,8 @@ function saveReport() {
     sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: soldWhereText } : null,
     deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs) },
     pipeline: cleanPipeline({ ...readPipeline(), updatedAt: '' }),
+    labels: cleanLabels(allUserData[key]?.labels),
+    activity: cleanActivity(allUserData[key]?.activity),
     includeNotes: ($('reportNotes') as HTMLInputElement).checked,
     generatedAt: new Date(),
   });
