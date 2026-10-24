@@ -10,6 +10,7 @@ import { getListings, LISTINGS_KEY } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import {
   addActivity,
+  logCall,
   getAgentNotes,
   getAllUserData,
   getUserData,
@@ -29,6 +30,7 @@ import {
   AGENTS_KEY,
   allLabels,
   CALL_OUTCOMES,
+  stageForOutcome,
   cleanActivity,
   cleanLabels,
   lastCall,
@@ -338,7 +340,11 @@ async function saveThePipeline() {
 }
 
 function setUpCrm() {
-  $('callOutcome').replaceChildren(...CALL_OUTCOMES.map((o) => new Option(o.label, o.value)));
+  // An outcome that is a stage moves the deal there too
+  $('callOutcome').replaceChildren(...CALL_OUTCOMES.map((o) => {
+    const stage = stageForOutcome(o.value);
+    return new Option(stage ? `${o.label} (moves the stage)` : o.label, o.value);
+  }));
 
   const addTyped = async () => {
     const input = $('labelInput') as HTMLInputElement;
@@ -356,8 +362,8 @@ function setUpCrm() {
     const box = $('activityText') as HTMLTextAreaElement;
     if (kind === 'note' && !box.value.trim()) { box.focus(); return; }
     const outcome = ($('callOutcome') as HTMLSelectElement).value as CallOutcome;
-    const entry = newActivity(kind, box.value, new Date(), kind === 'call' ? { outcome } : {});
-    await saveOr(async () => { await addActivity(key, entry); box.value = ''; }, 'Could not save to the timeline');
+    const save = kind === 'call' ? () => logCall(key, box.value, outcome) : () => addActivity(key, newActivity('note', box.value, new Date()));
+    await saveOr(async () => { await save(); box.value = ''; }, 'Could not save to the timeline');
   };
   $('addNote').addEventListener('click', log('note'));
   $('logCall').addEventListener('click', log('call'));
@@ -866,7 +872,7 @@ function calculate() {
     ['Rent', `${formatMoney(h.rentMonthly)} a month`],
     ['Gross yield', pct(h.grossYieldPct)],
     ['Net yield (before mortgage)', pct(h.netYieldPct)],
-    ['Running costs', `${formatMoney(h.runningCostsMonthly)} a month`, false, 'Management, repairs and empty rooms, bills, other costs and the licence'],
+    ['Running costs', `${formatMoney(h.runningCostsMonthly)} a month`, false, 'Management, repairs and empty rooms, bills, the licence and your monthly costs'],
     ['Mortgage payment', `${formatMoney(h.mortgageMonthly)} a month`],
     ['Cashflow', `${formatMoney(h.cashflowMonthly)} a month`, h.cashflowMonthly < 0],
     ['Cashflow a room', h.cashflowPerRoom == null ? '—' : `${formatMoney(h.cashflowPerRoom)} a month`, h.cashflowMonthly < 0],

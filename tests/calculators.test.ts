@@ -84,7 +84,7 @@ const deal = (extra: Partial<DealInputs>): DealInputs => ({
 
 describe('buyToLet', () => {
   it('works out yields, cashflow and return on cash', () => {
-    const r = buyToLet(deal({ managementPct: 10, maintenancePct: 5, otherMonthly: 0, buyingCosts: 1_500 }));
+    const r = buyToLet(deal({ managementPct: 10, maintenancePct: 5, buyingCosts: 1_500 }));
     expect(r.grossYieldPct).toBeCloseTo(5.2, 1);
     expect(r.deposit).toBe(103_750);
     expect(r.loan).toBe(311_250);
@@ -205,6 +205,16 @@ describe('sourcing fee and custom costs', () => {
     expect(inputs.customCosts).toEqual([{ name: 'Survey', amount: 600, when: 'once' }]);
     expect(dealInputsFor({ price: 1, listingType: 'sale', postcode: null, postcodePartial: null }, { sourcingFeeType: 'x' as never }).inputs.sourcingFeeType).toBe('fixed');
   });
+
+  it('turns an "Other costs" figure saved before 0.4.1 into a named monthly cost', () => {
+    const listing = { price: 250_000, listingType: 'sale' as const, postcode: 'CF14 9BP', postcodePartial: 'CF14' };
+    const { inputs } = dealInputsFor(listing, { otherMonthly: 45, customCosts: [{ name: 'Survey', amount: 600, when: 'once' }] } as never);
+    expect(inputs.customCosts).toEqual([{ name: 'Survey', amount: 600, when: 'once' }, { name: 'Other costs', amount: 45, when: 'monthly' }]);
+    expect('otherMonthly' in inputs).toBe(false);
+    // The same running costs as before
+    expect(buyToLet({ ...inputs, rentMonthly: 1_000 }).runningCostsMonthly).toBe(180 + 45);
+    expect(dealInputsFor(listing, { otherMonthly: 0 } as never).inputs.customCosts).toEqual([]);
+  });
 });
 
 describe('flip', () => {
@@ -247,7 +257,7 @@ describe('hmo', () => {
     const r = hmo(deal({
       price: 200_000, buyer: 'home_mover', depositPct: 25, ratePct: 6, mortgageType: 'interest_only', buyingCosts: 1_500,
       refurbCost: 20_000, hmoRooms: 5, hmoRoomRent: 550, hmoManagementPct: 12, maintenancePct: 8,
-      hmoBillsMonthly: 500, otherMonthly: 100, hmoLicenceCost: 1_200, hmoLicenceYears: 5,
+      hmoBillsMonthly: 500, customCosts: [{ name: 'Insurance', amount: 100, when: 'monthly' }], hmoLicenceCost: 1_200, hmoLicenceYears: 5,
     }));
     expect(r.rentMonthly).toBe(2_750);
     expect(r.licenceMonthly).toBe(20);

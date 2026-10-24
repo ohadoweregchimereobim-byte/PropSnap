@@ -63,6 +63,17 @@ export const CALL_OUTCOMES = [
 
 export type CallOutcome = typeof CALL_OUTCOMES[number]['value'];
 
+/** The deal stage a call outcome means, or null when it leaves the stage as it is */
+export function stageForOutcome(outcome: CallOutcome | undefined): PipelineStatus | null {
+  switch (outcome) {
+    case 'viewing_booked': return 'viewing';
+    case 'offer_made': return 'offer';
+    case 'offer_accepted': return 'accepted';
+    case 'offer_rejected': return 'rejected';
+    default: return null;
+  }
+}
+
 export interface Activity {
   id: string;
   /** ISO 8601 */
@@ -71,7 +82,7 @@ export interface Activity {
   text: string;
   /** Calls only */
   outcome?: CallOutcome;
-  /** Stage changes only: the new stage */
+  /** Stage changes: the new stage. Calls: the stage the call moved the deal to, if it did */
   stage?: PipelineStatus;
 }
 
@@ -102,6 +113,7 @@ export function cleanActivity(saved: unknown): Activity[] {
     const entry: Activity = { id: a.id, at: a.at, kind: a.kind, text };
     if (a.kind === 'call') {
       entry.outcome = CALL_OUTCOMES.some((o) => o.value === a.outcome) ? (a.outcome as CallOutcome) : 'spoke';
+      if (STATUSES.some((s) => s.value === a.stage)) entry.stage = a.stage as PipelineStatus;
     }
     if (a.kind === 'stage') {
       if (!STATUSES.some((s) => s.value === a.stage)) continue;
@@ -131,7 +143,9 @@ export function timeline(activity: Activity[], priceHistory: PricePoint[] | null
     at: a.at,
     kind: a.kind,
     id: a.id,
-    title: a.kind === 'call' ? `Call: ${outcomeLabel(a.outcome)}` : a.kind === 'stage' ? `Stage: ${statusLabel(a.stage)}` : 'Note',
+    title: a.kind === 'call'
+      ? `Call: ${outcomeLabel(a.outcome)}${a.stage ? ` (stage moved to ${statusLabel(a.stage)})` : ''}`
+      : a.kind === 'stage' ? `Stage: ${statusLabel(a.stage)}` : 'Note',
     text: a.text,
   }));
 

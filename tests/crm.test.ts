@@ -12,6 +12,7 @@ import {
   lastCall,
   newActivity,
   removeLabel,
+  stageForOutcome,
   timeline,
   whenText,
   type Activity,
@@ -95,6 +96,24 @@ describe('activity', () => {
     expect(whenText(new Date(2026, 9, 23, 8, 0).toISOString(), now)).toBe('today');
     expect(whenText(new Date(2026, 9, 22, 23, 0).toISOString(), now)).toBe('yesterday');
     expect(whenText(new Date(2026, 9, 18, 9, 0).toISOString(), now)).toBe('5 days ago');
+  });
+});
+
+describe('calls that move the stage', () => {
+  it('maps the stage outcomes, and leaves the others alone', () => {
+    expect(stageForOutcome('viewing_booked')).toBe('viewing');
+    expect(stageForOutcome('offer_made')).toBe('offer');
+    expect(stageForOutcome('offer_accepted')).toBe('accepted');
+    expect(stageForOutcome('offer_rejected')).toBe('rejected');
+    expect(stageForOutcome('spoke')).toBeNull();
+    expect(stageForOutcome('no_answer')).toBeNull();
+  });
+
+  it('keeps the stage on a call and says so in the timeline', () => {
+    const [call] = cleanActivity([{ id: 'c', at: '2026-10-20T09:00:00Z', kind: 'call', text: '', outcome: 'offer_accepted', stage: 'accepted' }]);
+    expect(call!.stage).toBe('accepted');
+    expect(timeline([call!], null)[0]!.title).toBe('Call: Offer accepted (stage moved to Offer accepted)');
+    expect(cleanActivity([{ id: 'd', at: '2026-10-20T09:00:00Z', kind: 'call', text: '', outcome: 'spoke', stage: 'nonsense' }])[0]!.stage).toBeUndefined();
   });
 });
 

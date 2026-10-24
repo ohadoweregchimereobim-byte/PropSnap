@@ -2,7 +2,7 @@ import type { PropertyListing } from '../adapters/types';
 import { priceChange } from './price-history';
 import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
 import { listingKey, type UserDataMap } from './user-data';
-import { cleanLabels } from './crm';
+import { cleanActivity, cleanLabels } from './crm';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -69,8 +69,10 @@ export function labelsOf(l: PropertyListing, userData: UserDataMap | undefined):
 
 export const isHidden = (l: PropertyListing, userData: UserDataMap | undefined) => userData?.[listingKey(l)]?.hidden === true;
 
-function searchText(l: PropertyListing, pipeline: Pipeline | null, labels: string[]): string {
-  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source, pipeline?.notes, ...labels]
+function searchText(l: PropertyListing, pipeline: Pipeline | null, labels: string[], userData: UserDataMap | undefined): string {
+  // The summary and every note and call in the timeline
+  const timeline = cleanActivity(userData?.[listingKey(l)]?.activity).map((a) => a.text);
+  return [l.displayAddress, l.fullAddress, l.postcode, l.postcodePartial, l.agentName, l.agentBranch, l.propertyType, l.source, pipeline?.notes, ...labels, ...timeline]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -112,7 +114,7 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
       if (view.price !== 'changed' && change.direction !== view.price) return false;
     }
     if (words.length === 0) return true;
-    const text = searchText(l, pipeline, labels);
+    const text = searchText(l, pipeline, labels, context.userData);
     return words.every((w) => text.includes(w));
   });
 
