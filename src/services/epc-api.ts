@@ -258,7 +258,8 @@ async function getCertificate(token: string, certificateNumber: string): Promise
     if (response.status === 429) {
       const wait = retryAfterMs(response.headers.get('Retry-After'), Date.now());
       console.warn(`PropSnap: certificate lookups rate limited, ranking on address only for ${Math.ceil(wait / 1000)} seconds`);
-      lookupsPausedUntil = Date.now() + wait;
+      // Never shorter than a pause already set by a refusal in the same batch
+      lookupsPausedUntil = Math.max(lookupsPausedUntil, Date.now() + wait);
       return null;
     }
     if (!response.ok) return null;

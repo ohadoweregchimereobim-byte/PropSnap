@@ -77,14 +77,6 @@ export function labelsOf(l: PropertyListing, userData: UserDataMap | undefined):
 
 export const isHidden = (l: PropertyListing, userData: UserDataMap | undefined) => userData?.[listingKey(l)]?.hidden === true;
 
-/**
- * The user data the dashboard shows (everything but the calculator's
- * numbers), as text to compare: typing in a calculator then redraws nothing
- */
-export function shownUserData(userData: UserDataMap | undefined): string {
-  return JSON.stringify(Object.entries(userData ?? {}).map(([key, { deal: _deal, ...shown }]) => [key, shown]));
-}
-
 /** Flood zone 2 or 3, an HMO Article 4, or a conservation area: worth a look before buying */
 export function areaFlags(l: PropertyListing): string[] {
   const a = cleanAreaSummary(l.area);

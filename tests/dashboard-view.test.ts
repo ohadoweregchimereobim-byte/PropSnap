@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { applyView, DEFAULT_VIEW, matchGroup, safeLink, shownUserData, summarise, areaFlags } from '../src/services/dashboard-view';
+import { applyView, DEFAULT_VIEW, matchGroup, safeLink, summarise, areaFlags } from '../src/services/dashboard-view';
+import { onlyDealsChanged, type UserDataMap } from '../src/services/user-data';
 
 function listing(id: string, extra: Partial<PropertyListing> = {}): PropertyListing {
   return {
@@ -201,12 +202,16 @@ describe('safeLink', () => {
   });
 });
 
-describe('shownUserData', () => {
-  it('ignores calculator numbers, which the table does not show', () => {
-    const before = { 'zoopla:1': { deal: { price: 280_000 }, labels: ['BRR'] } };
-    expect(shownUserData({ 'zoopla:1': { deal: { price: 275_000 }, labels: ['BRR'] } })).toBe(shownUserData(before));
-    expect(shownUserData({ 'zoopla:1': { deal: { price: 280_000 }, labels: ['BRR', 'HMO'] } })).not.toBe(shownUserData(before));
-    expect(shownUserData({ ...before, 'zoopla:2': { hidden: true } })).not.toBe(shownUserData(before));
-    expect(shownUserData(undefined)).toBe(shownUserData({}));
+describe('onlyDealsChanged', () => {
+  it('is true for calculator numbers only, which no table shows', () => {
+    const note = { id: 'a1', at: '2026-10-24T12:00:00Z', kind: 'note' as const, text: 'Rang the agent' };
+    const before: UserDataMap = { 'zoopla:1': { deal: { price: 280_000 }, labels: ['BRR'], activity: [note] } };
+    expect(onlyDealsChanged(before, { 'zoopla:1': { ...before['zoopla:1'], deal: { price: 275_000 } } })).toBe(true);
+    expect(onlyDealsChanged(before, { 'zoopla:1': { ...before['zoopla:1'], labels: ['BRR', 'HMO'] } })).toBe(false);
+    expect(onlyDealsChanged(before, { ...before, 'zoopla:2': { hidden: true } })).toBe(false);
+    expect(onlyDealsChanged(before, { 'zoopla:1': { ...before['zoopla:1'], activity: [] } })).toBe(false);
+    expect(onlyDealsChanged(undefined, {})).toBe(true);
+    // An odd entry saved by hand or an old build does not break it
+    expect(onlyDealsChanged({ 'zoopla:1': null } as unknown as UserDataMap, before)).toBe(false);
   });
 });

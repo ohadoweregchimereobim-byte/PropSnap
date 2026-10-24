@@ -13,7 +13,7 @@ import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import { daysOnMarket, describeChange, describeDays, describePortalChanges, latestPortalChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
-import { getAgentNotes, getAllUserData, listingKey, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import { getAgentNotes, getAllUserData, listingKey, onlyDealsChanged, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import { AGENTS_KEY, allLabels, cleanActivity, cleanLabels, groupByAgent, lastCall, outcomeLabel, whenText, type AgentNotes } from '../../src/services/crm';
 import {
   applyView,
@@ -24,7 +24,6 @@ import {
   labelsOf,
   pipelineOf,
   safeLink,
-  shownUserData,
   summarise,
   type SortKey,
   type ViewOptions,
@@ -131,8 +130,7 @@ async function init() {
       const { oldValue, newValue } = changes[USER_DATA_KEY]!;
       userData = (newValue as UserDataMap | undefined) ?? {};
       // A listing page's calculator saves as the user types; the table has none of it
-      const unseen = shownUserData(oldValue as UserDataMap | undefined) === shownUserData(userData);
-      if (unseen && !(LISTINGS_KEY in changes)) return;
+      if (onlyDealsChanged(oldValue as UserDataMap | undefined, userData) && !(LISTINGS_KEY in changes)) return;
     }
     render();
   });
