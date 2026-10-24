@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { LISTING_URLS } from './listing-urls';
 import { findFloorAreaInText } from './floor-area-text';
 
 /**
@@ -16,10 +17,7 @@ import { findFloorAreaInText } from './floor-area-text';
 export class OpenRentAdapter implements SiteAdapter {
   site = 'openrent' as const;
 
-  matchPatterns = [
-    /^https:\/\/www\.openrent\.(?:co\.uk|com)\/property-to-rent\/[^/]+\/[^/]+\/\d+/,
-    /^https:\/\/www\.openrent\.(?:co\.uk|com)\/property-to-rent\/[^/]+\/\d+/,
-  ];
+  matchPatterns = LISTING_URLS.openrent;
 
   canHandle(url: string): boolean {
     return this.matchPatterns.some((p) => p.test(url));

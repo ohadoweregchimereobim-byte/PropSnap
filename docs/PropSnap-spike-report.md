@@ -1,5 +1,7 @@
 # PropSnap — Phase 0 Spike Report
 
+> Historical document from early October 2026. What PropSnap does now is described in `CLAUDE.md` at the root of the repo.
+
 **Date:** 3 October 2026  
 **Status:** All three sites verified. Green light to build.
 

@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { LISTING_URLS } from './listing-urls';
 import { epcBand } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
@@ -16,10 +17,7 @@ import { findUnitNumberInText } from './unit-number';
 export class ZooplaAdapter implements SiteAdapter {
   site = 'zoopla' as const;
 
-  matchPatterns = [
-    /^https:\/\/www\.zoopla\.co\.uk\/for-sale\/details\/\d+/,
-    /^https:\/\/www\.zoopla\.co\.uk\/to-rent\/details\/\d+/,
-  ];
+  matchPatterns = LISTING_URLS.zoopla;
 
   canHandle(url: string): boolean {
     return this.matchPatterns.some((p) => p.test(url));

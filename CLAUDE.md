@@ -21,7 +21,7 @@ Users browse Rightmove, Zoopla, or OpenRent listings. They click "Capture" in th
 
 ## Site adapters (`src/adapters/`)
 
-Each site exposes data differently:
+Each site exposes data differently. `tests/adapters.test.ts` runs each adapter's `extract()` on a small page built the way that site builds its listing pages (DOM from `linkedom`); when a site changes its page, put a saved copy of the real page in there. Each site's listing URL patterns live in `src/adapters/listing-urls.ts`; the popup decides "is this a listing page" with `listingSiteForUrl` (the same patterns the content script uses), so it never loads the extraction code.
 
 ### Rightmove (`rightmove.ts`)
 - Data source: `window.__PAGE_MODEL` — packed JSON format (schema map at index 0, values by index)
@@ -79,6 +79,8 @@ Each site exposes data differently:
 - TypeScript
 - Chrome Manifest V3
 - No UI framework (vanilla DOM)
+- Shared display helpers in `src/services/format.ts` (`formatMoney`, `SITE_NAMES`); storage keys are exported from `storage.ts` (`LISTINGS_KEY`, `SETTINGS_KEY`) and `user-data.ts` (`USER_DATA_KEY`, `listingKey`)
+- Bump the version in `package.json` and `wxt.config.ts` with each PR, so `chrome://extensions` shows which build is loaded
 
 ## Build
 

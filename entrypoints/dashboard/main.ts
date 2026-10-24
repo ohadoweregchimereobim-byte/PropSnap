@@ -6,12 +6,13 @@
  * a new capture is saved, so it stays live while open.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { chooseAddress, clearListings, deleteListing, getListings, listingsToCsv } from '../../src/services/storage';
+import { chooseAddress, clearListings, deleteListing, getListings, LISTINGS_KEY, listingsToCsv } from '../../src/services/storage';
+import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
-import { getAllUserData, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import { getAllUserData, listingKey, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import {
   applyView,
   DEFAULT_VIEW,
@@ -22,8 +23,6 @@ import {
   type SortKey,
   type ViewOptions,
 } from '../../src/services/dashboard-view';
-
-const STORAGE_KEY = 'propsnap_listings';
 
 const rowsEl = document.getElementById('rows')!;
 const emptyEl = document.getElementById('empty')!;
@@ -47,12 +46,6 @@ const stats = {
   due: document.getElementById('statDue')!,
 };
 
-const SITE_NAMES: Record<PropertyListing['source'], string> = {
-  rightmove: 'Rightmove',
-  zoopla: 'Zoopla',
-  openrent: 'OpenRent',
-};
-
 const BADGES: Record<ReturnType<typeof matchGroup>, { text: string; style: string }> = {
   exact: { text: 'Exact', style: 'exact' },
   user_choice: { text: 'Your choice', style: 'chosen' },
@@ -66,7 +59,6 @@ const picked = new Set<string>();
 const planBtn = document.getElementById('planBtn') as HTMLButtonElement;
 // Pickers the user opened stay open when the table redraws after a choice
 const openPickers = new Set<string>();
-const rowKey = (l: PropertyListing) => `${l.source}:${l.listingId}`;
 let listings: PropertyListing[] = [];
 let userData: UserDataMap = {};
 
@@ -102,7 +94,7 @@ async function init() {
   document.getElementById('exportBtn')!.addEventListener('click', handleExport);
   planBtn.addEventListener('click', () => {
     // Ticked homes start a new plan; with none ticked, open the saved plan
-    const keys = listings.map(rowKey).filter((k) => picked.has(k));
+    const keys = listings.map(listingKey).filter((k) => picked.has(k));
     location.href = keys.length ? `./planner.html?${new URLSearchParams({ keys: keys.join(',') })}` : './planner.html';
   });
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
@@ -110,8 +102,8 @@ async function init() {
   // A capture in another tab saves here too, so redraw when storage changes
   // The change carries the new value, so there is nothing to read back
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !(STORAGE_KEY in changes || USER_DATA_KEY in changes)) return;
-    if (STORAGE_KEY in changes) listings = (changes[STORAGE_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
+    if (area !== 'local' || !(LISTINGS_KEY in changes || USER_DATA_KEY in changes)) return;
+    if (LISTINGS_KEY in changes) listings = (changes[LISTINGS_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
     if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
     render();
   });
@@ -149,7 +141,7 @@ function render() {
   }
 
   // Forget ticks on homes that are gone
-  const known = new Set(listings.map(rowKey));
+  const known = new Set(listings.map(listingKey));
   for (const k of [...picked]) if (!known.has(k)) picked.delete(k);
   updatePlanButton();
 
@@ -207,11 +199,11 @@ function pickCell(l: PropertyListing): HTMLTableCellElement {
   const td = document.createElement('td');
   const box = document.createElement('input');
   box.type = 'checkbox';
-  box.checked = picked.has(rowKey(l));
+  box.checked = picked.has(listingKey(l));
   box.setAttribute('aria-label', `Pick ${l.fullAddress || l.displayAddress} for viewings`);
   box.addEventListener('change', () => {
-    if (box.checked) picked.add(rowKey(l));
-    else picked.delete(rowKey(l));
+    if (box.checked) picked.add(listingKey(l));
+    else picked.delete(listingKey(l));
     updatePlanButton();
   });
   td.append(box);
@@ -269,10 +261,10 @@ function candidatePicker(l: PropertyListing): HTMLDetailsElement {
   const candidates = l.addressCandidates ?? [];
   const details = document.createElement('details');
   details.className = 'picker';
-  details.open = openPickers.has(rowKey(l));
+  details.open = openPickers.has(listingKey(l));
   details.addEventListener('toggle', () => {
-    if (details.open) openPickers.add(rowKey(l));
-    else openPickers.delete(rowKey(l));
+    if (details.open) openPickers.add(listingKey(l));
+    else openPickers.delete(listingKey(l));
   });
 
   const summary = document.createElement('summary');
@@ -349,7 +341,7 @@ function stageCell(l: PropertyListing): HTMLTableCellElement {
   select.addEventListener('change', async () => {
     try {
       // Only the stage: notes typed on the listing page meanwhile are kept
-      await updatePipeline(rowKey(l), { status: select.value as PipelineStatus });
+      await updatePipeline(listingKey(l), { status: select.value as PipelineStatus });
     } catch (error: any) {
       setStatus(`Could not save the stage: ${error.message}`);
     }
@@ -383,7 +375,7 @@ function actionsCell(l: PropertyListing): HTMLTableCellElement {
 
   const details = document.createElement('a');
   details.className = 'btn btn-row';
-  details.href = `./listing.html?key=${encodeURIComponent(rowKey(l))}`;
+  details.href = `./listing.html?key=${encodeURIComponent(listingKey(l))}`;
   details.textContent = 'Details';
   details.title = 'Deal calculator for this listing';
   wrap.append(details);
@@ -442,13 +434,6 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-// One formatter for every price on the page; making one per cell is slow
-const MONEY = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
-
-function formatMoney(value: number): string {
-  return MONEY.format(value);
 }
 
 function formatPrice(l: PropertyListing): string {
