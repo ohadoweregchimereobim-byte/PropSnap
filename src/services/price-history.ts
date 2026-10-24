@@ -29,7 +29,9 @@ export function withPriceHistory(previous: PropertyListing | undefined, next: Pr
 
   const last = history[history.length - 1];
   const point = pointOf(next);
-  if (!last || last.price !== point.price || last.qualifier !== point.qualifier) history.push(point);
+  // "offers_over" (saved before 0.6.1) and "Offers over" are the same wording
+  const wording = (q: string | null) => (q ?? '').toLowerCase().replace(/[_\s]+/g, ' ').trim();
+  if (!last || last.price !== point.price || wording(last.qualifier) !== wording(point.qualifier)) history.push(point);
 
   return {
     ...next,

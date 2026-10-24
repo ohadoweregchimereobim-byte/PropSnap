@@ -34,6 +34,7 @@ Each site exposes data differently. `tests/adapters.test.ts` runs each adapter's
 - Data source: JSON-LD (`<script type="application/ld+json">`) with `@type: "RealEstateListing"`
 - Also regex-parses analytics tracking data from script tags for `branch_name`, `listing_id`, `outcode`, `incode`
 - Gets full postcode by combining outcode + incode
+- Page data uses codes (`offers_over`, `share_of_freehold`, `semi_detached_house`, `flat`); `zooplaLabel` turns the price wording, type, tenure and furnishing into words ("Offers over", "Semi-detached house"). `withPriceHistory` compares the price wording ignoring case and underscores, so a listing saved with the code gets no extra history point when it is captured again
 
 ### OpenRent (`openrent.ts`)
 - Data source: Server-rendered HTML, DOM scraping via `querySelector`
