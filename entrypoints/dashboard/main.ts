@@ -11,6 +11,19 @@ import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import { describeEnergy } from '../../src/services/epc-energy';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
+import {
+  backupFileName,
+  BACKUP_MAX_BYTES,
+  downloadBackup,
+  getLastBackup,
+  makeBackup,
+  noteBackupMade,
+  readAllForBackup,
+  readBackup,
+  restoreBackup,
+  type BackupFile,
+  type RestoreMode,
+} from '../../src/services/backup';
 import { daysOnMarket, describeChange, describeDays, describePortalChanges, latestPortalChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { getAgentNotes, getAllUserData, listingKey, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
@@ -119,15 +132,17 @@ async function init() {
     if (keys.length) location.href = `./letters.html?${new URLSearchParams({ keys: keys.join(',') })}`;
   });
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
+  setUpBackup();
 
   // A capture in another tab saves here too, so redraw when storage changes
   // The change carries the new value, so there is nothing to read back
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !(LISTINGS_KEY in changes || USER_DATA_KEY in changes || AGENTS_KEY in changes)) return;
-    if (AGENTS_KEY in changes) { getAgentNotes().then((notes) => { agentNotes = notes; render(); }); return; }
+    // A restore changes all three at once, so take every one before drawing
     if (LISTINGS_KEY in changes) listings = (changes[LISTINGS_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
     if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
-    render();
+    if (AGENTS_KEY in changes) getAgentNotes().then((notes) => { agentNotes = notes; render(); });
+    else render();
   });
 
   await reload();
@@ -137,6 +152,7 @@ async function reload() {
   try {
     [listings, userData, agentNotes] = await Promise.all([getListings(), getAllUserData(), getAgentNotes()]);
     render();
+    showBackupNote();
   } catch (error: any) {
     setStatus(`Could not read saved listings: ${error.message}`);
   }
@@ -576,9 +592,90 @@ function handleExport() {
   setStatus(`Exported ${listings.length} listing${listings.length === 1 ? '' : 's'}`);
 }
 
+// ── Backup and restore ───────────────────────────────────────────────────
+
+let pendingRestore: BackupFile | null = null;
+
+function setUpBackup() {
+  document.getElementById('backupBtn')!.addEventListener('click', () => saveBackup('Backed up'));
+  const fileInput = document.getElementById('restoreFile') as HTMLInputElement;
+  document.getElementById('restoreBtn')!.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    if (file.size > BACKUP_MAX_BYTES) { setStatus('This file is too big to be a PropSnap backup.'); return; }
+    const read = readBackup(await file.text());
+    if (!read.ok) { setStatus(read.why); return; }
+    pendingRestore = read.backup;
+    const have = new Set(listings.map(listingKey));
+    const newOnes = read.listings.filter((l) => !have.has(listingKey(l))).length;
+    const made = read.backup.createdAt ? new Date(read.backup.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'an unknown date';
+    document.getElementById('restoreSummary')!.textContent = `Backup from ${made}${read.backup.appVersion ? ` (PropSnap ${read.backup.appVersion})` : ''}: ${read.listings.length} home${read.listings.length === 1 ? '' : 's'}`
+      + `${read.skipped ? `, plus ${read.skipped} that could not be read` : ''}. You have ${listings.length} now; ${newOnes} of the backup's are not here yet.`;
+    const add = document.getElementById('restoreAdd') as HTMLButtonElement;
+    add.textContent = newOnes ? `Add the ${newOnes} new home${newOnes === 1 ? '' : 's'}` : 'Nothing new to add';
+    add.disabled = newOnes === 0;
+    document.getElementById('restorePanel')!.hidden = false;
+  });
+  document.getElementById('restoreCancel')!.addEventListener('click', closeRestore);
+  document.getElementById('restoreAdd')!.addEventListener('click', () => runRestore('add'));
+  document.getElementById('restoreReplace')!.addEventListener('click', () => runRestore('replace'));
+  showBackupNote();
+}
+
+function closeRestore() {
+  pendingRestore = null;
+  document.getElementById('restorePanel')!.hidden = true;
+}
+
+async function saveBackup(done: string): Promise<boolean> {
+  try {
+    const now = new Date();
+    downloadBackup(makeBackup(await readAllForBackup(), now, chrome.runtime.getManifest().version), now);
+    await noteBackupMade(now);
+    setStatus(`${done}: ${listings.length} home${listings.length === 1 ? '' : 's'} saved to ${backupFileName(now)} in your downloads. Your EPC key is not in it.`);
+    showBackupNote();
+    return true;
+  } catch (error: any) {
+    setStatus(`Could not back up: ${error.message}`);
+    return false;
+  }
+}
+
+async function runRestore(mode: RestoreMode) {
+  const backup = pendingRestore;
+  if (!backup) return;
+  if (mode === 'replace') {
+    if (!confirm('Replace all your homes, notes, labels, plan, branding and letters with the backup? PropSnap saves a backup of what you have now first.')) return;
+    // A copy of what is here now, in case the wrong file was picked
+    if (listings.length && !(await saveBackup('Saved a copy of what you had'))) return;
+  }
+  try {
+    const { added } = await restoreBackup(backup, mode);
+    closeRestore();
+    setStatus(mode === 'add'
+      ? `Restored: added ${added} home${added === 1 ? '' : 's'} with their notes.`
+      : `Restored the backup: ${added} home${added === 1 ? '' : 's'}. Your EPC key was kept.`);
+  } catch (error: any) {
+    setStatus(`Could not restore: ${error.message}`);
+  }
+}
+
+/** A gentle nudge when there are homes and no recent backup */
+async function showBackupNote() {
+  const note = document.getElementById('backupNote')!;
+  const last = await getLastBackup();
+  const days = last ? Math.floor((Date.now() - Date.parse(last)) / 86_400_000) : null;
+  note.hidden = listings.length === 0 || (days !== null && days < 30);
+  note.textContent = days === null
+    ? 'Your homes and notes are kept only in this browser. Click Back up now and then to keep a copy you can restore.'
+    : `Your last backup was ${days} days ago. Click Back up to save a fresh copy.`;
+}
+
 async function handleClearAll() {
   if (listings.length === 0) return;
-  if (!confirm(`Delete all ${listings.length} saved listings? This cannot be undone. Export a CSV first if you want a copy.`)) return;
+  if (!confirm(`Delete all ${listings.length} saved listings? This cannot be undone. Click Back up first if you want a copy you can restore.`)) return;
   try {
     await clearListings();
     setStatus('All listings deleted');
