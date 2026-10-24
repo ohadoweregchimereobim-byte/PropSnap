@@ -147,6 +147,8 @@ describe('putting it together', () => {
     expect(areaCountries({ postcode: 'SW1P 1LQ', postcodePartial: 'SW1P' })).toEqual(['england']);
     expect(areaCountries({ postcode: null, postcodePartial: 'LL11' })).toEqual(['wales']);
     expect(areaCountries({ postcode: 'SY10 7AB', postcodePartial: 'SY10' })).toEqual(['england', 'wales']);
+    // Sedbury (NP16 7) is in England though most of NP16 is Welsh
+    expect(areaCountries({ postcode: 'NP16 7AA', postcodePartial: 'NP16' })).toEqual(['england', 'wales']);
     expect(areaCountries({ postcode: null, postcodePartial: null })).toEqual(['england', 'wales']);
   });
 
@@ -179,9 +181,12 @@ describe('putting it together', () => {
     };
     // Nothing answered: the last summary stands as it was, date and all
     expect(summariseArea(failedAll, { wales: false, previous })).toEqual(previous);
-    // What did answer replaces the old result
+    // What did answer replaces the old result; the date stays the older one, as not everything was checked again
     const crimeOnly = { ...failedAll, crime: { month: '2026-08', total: 12, byCategory: [] } };
-    expect(summariseArea(crimeOnly, { wales: false, previous })).toEqual({ ...previous, checkedAt: '2026-10-24T12:00:00Z', crimeTotal: 12, crimeMonth: '2026-08' });
+    expect(summariseArea(crimeOnly, { wales: false, previous })).toEqual({ ...previous, crimeTotal: 12, crimeMonth: '2026-08' });
+    // Everything answered: today's date
+    const all = { ...failedAll, flood: { zone: 'none' as const, by: null, sourceOfFlooding: null }, conservation: [], article4: [], failed: [] };
+    expect(summariseArea({ ...all, crime: crimeOnly.crime }, { wales: false, previous })).toMatchObject({ checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none', article4Count: 0 });
     // Wales has no Article 4 map: that is no answer, and nothing old is kept for it
     const welsh = { ...previous, article4Count: 1, hmoArticle4: true };
     expect(summariseArea({ ...crimeOnly, article4: [] }, { wales: true, previous: welsh })).toMatchObject({ article4Count: null, hmoArticle4: null, crimeTotal: 12 });

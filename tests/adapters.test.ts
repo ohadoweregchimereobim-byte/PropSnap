@@ -114,11 +114,42 @@ describe('a page left over from another listing', () => {
     const zooplaPage = `<html><head><script>{"listing_id":"67000001","display_address":"Old Road, Cardiff CF11"}</script></head><body></body></html>`;
     await expect(capture('https://www.zoopla.co.uk/for-sale/details/67012345/', zooplaPage)).rejects.toThrow(/Reload the page/);
 
+    // Rightmove: the script copy and the live page model both still hold the old listing
     const model = { data: JSON.stringify(pack({ propertyData: { id: '160000001', address: { displayAddress: 'Old Road' } } })) };
     const rightmovePage = `<html><body><script>window.__PAGE_MODEL = ${JSON.stringify(model)};</script></body></html>`;
-    await expect(capture('https://www.rightmove.co.uk/properties/160123456', rightmovePage)).rejects.toThrow(/Reload the page/);
+    openPage('https://www.rightmove.co.uk/properties/160123456', rightmovePage);
+    livePageModel(model);
+    await expect(getAdapterForUrl('https://www.rightmove.co.uk/properties/160123456')!.extract()).rejects.toThrow(/Reload the page/);
+  });
+
+  it('reads Rightmove\'s live page model when only the script copy is old', async () => {
+    const old = { data: JSON.stringify(pack({ propertyData: { id: '160000001', address: { displayAddress: 'Old Road' } } })) };
+    const live = { data: JSON.stringify(pack({ propertyData: { id: '160123456', address: { displayAddress: 'New Street, Cardiff, CF24' } } })) };
+    openPage('https://www.rightmove.co.uk/properties/160123456', `<html><body><script>window.__PAGE_MODEL = ${JSON.stringify(old)};</script></body></html>`);
+    livePageModel(live);
+    const listing = await getAdapterForUrl('https://www.rightmove.co.uk/properties/160123456')!.extract();
+    expect(listing).toMatchObject({ listingId: '160123456', displayAddress: 'New Street, Cardiff, CF24' });
+  });
+
+  it('reads this Zoopla listing\'s data when other homes come first in the page', async () => {
+    const similar = `<script>{"listing_id":"67000001","display_address":"Similar Road, Cardiff CF11","num_beds":4}</script>`;
+    const own = `<script>{"listing_id":"67012345","display_address":"Ferry Court, Cardiff CF11","num_beds":2}</script>`;
+    const listing = await capture('https://www.zoopla.co.uk/for-sale/details/67012345/', `<html><head>${similar}${own}</head><body></body></html>`);
+    expect(listing).toMatchObject({ listingId: '67012345', displayAddress: 'Ferry Court, Cardiff CF11', bedrooms: 2 });
   });
 });
+
+/** The page answers PropSnap's injected script with `model` as its live window.__PAGE_MODEL */
+function livePageModel(model: unknown) {
+  const { CustomEvent } = parseHTML('<html></html>');
+  const root = document.documentElement;
+  const append = root.appendChild.bind(root);
+  root.appendChild = ((node: Node) => {
+    const added = append(node);
+    document.dispatchEvent(new CustomEvent('__PROPSNAP_DATA__', { detail: JSON.stringify(model) }));
+    return added;
+  }) as typeof root.appendChild;
+}
 
 describe('Zoopla', () => {
   const jsonLd = {
@@ -225,6 +256,13 @@ describe('OpenRent', () => {
       longitude: -0.1356,
       floorAreaFromText: 48,
     });
+  });
+
+  it('keeps an EPC row that says no certificate is needed', async () => {
+    const url = 'https://www.openrent.co.uk/property-to-rent/london/1-bed-flat-rochester-row-sw1p/2345678';
+    expect((await capture(url, page.replace('C (72)', 'Exempt'))).epcRating).toBe('Exempt');
+    const ownRow = page.replace('<tr><td>EPC Rating</td><td>C (72)</td></tr>', '<tr><td>EPC Not Required</td><td>Yes</td></tr>');
+    expect((await capture(url, ownRow)).epcRating).toBe('Not required');
   });
 });
 

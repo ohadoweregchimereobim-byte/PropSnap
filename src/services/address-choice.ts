@@ -33,15 +33,8 @@ export function keepUserChoice(previous: PropertyListing | undefined, next: Prop
   if (normalisePostcode(previous.postcode) !== normalisePostcode(next.postcode)) return next;
   if (next.addressConfidence === 'exact') return next;
 
-  return {
-    ...next,
-    fullAddress: previous.fullAddress,
-    addressConfidence: 'user_choice',
-    addressCandidates: next.addressCandidates ?? previous.addressCandidates,
-    enrichmentDetail: previous.enrichmentDetail,
-    epcCertificateNumber: previous.epcCertificateNumber ?? null,
-    epcEnergy: previous.epcEnergy ?? null,
-  };
+  // A new search's close homes are newer than the ones kept
+  return { ...withAddressOf(previous, next), addressCandidates: next.addressCandidates ?? previous.addressCandidates ?? null };
 }
 
 /** `next` with the home found for `previous`: its address, close homes, certificate and energy figures */

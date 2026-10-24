@@ -79,9 +79,7 @@ export class OpenRentAdapter implements SiteAdapter {
       tenure: null,
       furnished: tableData['Furnishing'] ?? tableData['Furnished'] ?? null,
       deposit: this.parsePrice(tableData['Deposit']),
-      // The band only ("C (72)" → "C"), as on the other sites
-      epcRating:
-        epcBand(tableData['EPC Rating'] ?? tableData['EPC']) ?? ('EPC Not Required' in tableData ? 'Not required' : null),
+      epcRating: openRentEpc(tableData),
 
       capturedAt: new Date().toISOString(),
     };
@@ -257,4 +255,17 @@ export class OpenRentAdapter implements SiteAdapter {
     const num = parseFloat(cleaned);
     return isNaN(num) ? null : num;
   }
+}
+
+/**
+ * The EPC row as a band only ("C (72)" → "C"), as on the other sites. A home
+ * that needs no certificate says so in the row or in a row of its own.
+ */
+function openRentEpc(table: Record<string, string>): string | null {
+  const text = table['EPC Rating'] ?? table['EPC'] ?? '';
+  const band = epcBand(text);
+  if (band) return band;
+  if (/exempt/i.test(text)) return 'Exempt';
+  if (/not required/i.test(text) || 'EPC Not Required' in table) return 'Not required';
+  return null;
 }

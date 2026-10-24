@@ -130,6 +130,15 @@ export function purchaseTax(price: number, region: TaxRegion, buyer: BuyerType):
 }
 
 /**
+ * Postcode districts with homes on both sides of the England–Wales border
+ * (from the ONS postcode directory, via postcodes.io, October 2026)
+ */
+export const BORDER_DISTRICTS: ReadonlySet<string> = new Set([
+  'CH1', 'CH4', 'GL16', 'HR3', 'HR5', 'LD7', 'LD8', 'LL14', 'NP7', 'NP16', 'NP25',
+  'SY5', 'SY7', 'SY9', 'SY10', 'SY13', 'SY14', 'SY15', 'SY21', 'SY22',
+]);
+
+/**
  * England or Wales from the postcode. Border districts can be either, so the
  * page lets the user change it; `sure` is false for those.
  */
@@ -140,15 +149,13 @@ export function taxRegionFromPostcode(postcode: string | null | undefined): { re
   const area = match[1]!;
   const district = Number(match[2]);
 
-  if (['CF', 'NP', 'SA', 'LL', 'LD'].includes(area)) return { region: 'wales', sure: true };
-  // Flintshire and the Welsh side of Shropshire / Powys
-  if (area === 'CH' && district >= 5 && district <= 8) return { region: 'wales', sure: true };
-  if (area === 'SY' && district >= 15 && district <= 25) return { region: 'wales', sure: true };
-  // Districts that cross the border
-  if ((area === 'SY' && [10, 13, 14].includes(district)) || area === 'HR' || (area === 'CH' && district === 4)) {
-    return { region: 'england', sure: false };
-  }
-  return { region: 'england', sure: true };
+  const wales = ['CF', 'NP', 'SA', 'LL', 'LD'].includes(area)
+    // Flintshire and the Welsh side of Shropshire / Powys
+    || (area === 'CH' && district >= 5 && district <= 8)
+    || (area === 'SY' && district >= 15 && district <= 25);
+  // Districts that cross the border (Herefordshire as a whole, as Hay-on-Wye is HR3)
+  const sure = !BORDER_DISTRICTS.has(`${area}${district}`) && area !== 'HR';
+  return { region: wales ? 'wales' : 'england', sure };
 }
 
 /** The usual mortgage term, used while the term box is empty */
@@ -158,7 +165,7 @@ export const DEFAULT_TERM_YEARS = 25;
 export function monthlyMortgage(loan: number, annualRatePct: number, years: number, type: MortgageType): number {
   if (!(loan > 0)) return 0;
   const r = annualRatePct / 100 / 12;
-  // A repayment mortgage over no time at all has no payment to show
+  // An empty term would divide by nothing: the usual term is used instead
   const n = (years > 0 ? years : DEFAULT_TERM_YEARS) * 12;
   if (type === 'interest_only' || r === 0) {
     return type === 'interest_only' ? loan * r : loan / n;

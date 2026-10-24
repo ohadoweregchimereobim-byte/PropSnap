@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { chooseAddress, clearListings, deleteListing, getListings, saveListing } from '../src/services/storage';
+import { chooseAddress, clearListings, deleteListing, getListings, samePlace, saveListing, setAreaSummary } from '../src/services/storage';
 import { addActivity, getAgentNotes, getAllUserData, getUserData, logCall, logLetters, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
 import { newActivity } from '../src/services/crm';
 
@@ -129,6 +129,21 @@ describe('saving listings', () => {
     await deleteListing('rightmove', '1');
     expect((await getListings()).map((l) => l.listingId)).toEqual(['2']);
     expect(Object.keys(await getAllUserData())).toEqual(['rightmove:2']);
+  });
+
+  it('keeps an area summary only for the place it was checked at', async () => {
+    const opened = listing('1', { latitude: 51.4983, longitude: -3.1621 });
+    await saveListing(opened);
+    const summary = { checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none' as const, conservation: '', article4Count: 0, hmoArticle4: false, crimeTotal: 12, crimeMonth: '2026-08' };
+    const save = () => setAreaSummary('rightmove', '1', (_previous, saved) => (samePlace(saved, opened) ? summary : null));
+
+    await save();
+    expect((await getListings())[0]!.area).toEqual(summary);
+    // Captured again with a corrected pin while the page was open: the old check is not saved on it
+    await saveListing(listing('1', { latitude: 51.5, longitude: -3.17 }));
+    expect((await getListings())[0]!.area).toBeUndefined();
+    await save();
+    expect((await getListings())[0]!.area).toBeUndefined();
   });
 
   it('clears everything', async () => {

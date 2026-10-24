@@ -290,15 +290,15 @@ export interface AreaSummary {
 /**
  * The short version. In Wales there is no Article 4 map, so "none found"
  * there is unknown (null), never a clear "no HMO Article 4". A check that
- * failed this time keeps its result from the `previous` summary.
+ * failed this time keeps its result from the `previous` summary, and then
+ * the summary keeps the earlier date too, so it never looks newer than it is.
  */
 export function summariseArea(a: AreaChecks, { wales, previous = null }: { wales: boolean; previous?: AreaSummary | null }): AreaSummary {
   const article4 = wales && a.article4?.length === 0 ? null : a.article4;
   const before = cleanAreaSummary(previous);
-  // Nothing answered: the last summary stands, with the date it was checked
-  if (before && !a.flood && !a.conservation && !article4 && !a.crime) return before;
+  const kept = before !== null && (!a.flood || !a.conservation || !a.article4 || !a.crime);
   return {
-    checkedAt: a.checkedAt,
+    checkedAt: kept ? before.checkedAt : a.checkedAt,
     floodZone: a.flood ? a.flood.zone : before?.floodZone ?? null,
     conservation: a.conservation ? (a.conservation.map((c) => c.name).join('; ') || '') : before?.conservation ?? null,
     article4Count: article4 ? article4.length : a.article4 ? null : before?.article4Count ?? null,

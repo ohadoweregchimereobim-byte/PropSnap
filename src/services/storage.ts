@@ -42,14 +42,20 @@ export function saveListing(listing: PropertyListing, { keepAddress = false }: {
     const next = keepAddress ? keepKnownAddress(previous, listing) : listing;
     const saved = withPriceHistory(previous, keepUserChoice(previous, next));
     // The area checks stay while the home is in the same place
-    const samePlace = previous && (previous.postcode ?? previous.postcodePartial) === (listing.postcode ?? listing.postcodePartial)
-      && previous.latitude === listing.latitude && previous.longitude === listing.longitude;
-    if (samePlace && previous.area && !saved.area) saved.area = previous.area;
+    if (previous && samePlace(previous, listing) && previous.area && !saved.area) saved.area = previous.area;
     filtered.unshift(saved); // Most recent first
 
     await chrome.storage.local.set({ [LISTINGS_KEY]: filtered });
     return saved;
   });
+}
+
+type Place = Pick<PropertyListing, 'postcode' | 'postcodePartial' | 'latitude' | 'longitude'>;
+
+/** Same postcode and map position: area checks made for one hold for the other */
+export function samePlace(a: Place, b: Place): boolean {
+  return (a.postcode ?? a.postcodePartial) === (b.postcode ?? b.postcodePartial)
+    && a.latitude === b.latitude && a.longitude === b.longitude;
 }
 
 /**
@@ -97,19 +103,22 @@ export function setEpcEnergy(source: string, listingId: string, energy: EpcEnerg
 
 /**
  * Keep the short area check results on a saved listing. `area` can be worked
- * out from the summary saved now, read under the same lock.
+ * out from the listing as saved now (read under the same lock); null leaves
+ * the saved summary as it is.
  */
 export function setAreaSummary(
   source: string,
   listingId: string,
-  area: AreaSummary | ((saved: AreaSummary | null) => AreaSummary),
+  area: AreaSummary | ((saved: AreaSummary | null, listing: PropertyListing) => AreaSummary | null),
 ): Promise<void> {
   return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
     const index = existing.findIndex((l) => listingKey(l) === listingKey({ source, listingId }));
     if (index === -1) return;
     const current = existing[index]!;
-    existing[index] = { ...current, area: typeof area === 'function' ? area(cleanAreaSummary(current.area)) : area };
+    const next = typeof area === 'function' ? area(cleanAreaSummary(current.area), current) : area;
+    if (!next) return;
+    existing[index] = { ...current, area: next };
     await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
   });
 }

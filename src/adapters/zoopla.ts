@@ -26,9 +26,10 @@ export class ZooplaAdapter implements SiteAdapter {
 
   async extract(): Promise<PropertyListing> {
     const jsonLd = this.extractJsonLd();
-    const analytics = this.extractAnalytics();
+    const fromUrl = this.getListingIdFromUrl();
+    const analytics = this.extractAnalytics(fromUrl);
 
-    const listingId = checkedListingId(this.getListingIdFromUrl(), analytics.listing_id);
+    const listingId = checkedListingId(fromUrl, analytics.listing_id);
     const url = window.location.href;
     const isRent = url.includes('/to-rent/');
 
@@ -124,15 +125,19 @@ export class ZooplaAdapter implements SiteAdapter {
    * Extract analytics tracking data from page markup.
    * Zoopla embeds tracking variables in script tags — we look for
    * common patterns like `branch_name`, `listing_id`, etc.
+   * The page can hold other homes' data too (similar homes, or the last
+   * listing after the site moved on without a full load), so the scripts
+   * that name `listingId` are read first.
    */
-  private extractAnalytics(): Record<string, string> {
+  private extractAnalytics(listingId: string): Record<string, string> {
     const result: Record<string, string> = {};
-    const scripts = document.querySelectorAll('script');
+    // Next.js flight data is a JS string, so its JSON arrives with escaped quotes
+    const texts = [...document.querySelectorAll('script')].map((script) => (script.textContent ?? '').replace(/\\"/g, '"'));
+    const own = new RegExp(`["']listing_id["']\\s*:\\s*["']?${listingId}(?!\\d)`);
+    const mine = listingId ? texts.filter((t) => own.test(t)) : [];
+    if (mine.length) result.listing_id = listingId;
 
-    for (const script of scripts) {
-      // Next.js flight data is a JS string, so its JSON arrives with escaped quotes
-      const text = (script.textContent ?? '').replace(/\\"/g, '"');
-
+    for (const text of [...mine, ...texts.filter((t) => !mine.includes(t))]) {
       // Look for tracking data patterns
       const patterns: Record<string, RegExp> = {
         listing_id: /["']listing_id["']\s*:\s*["']?(\d+)["']?/,
