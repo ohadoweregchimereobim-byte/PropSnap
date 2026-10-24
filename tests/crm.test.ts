@@ -33,8 +33,8 @@ describe('labels', () => {
     expect(cleanLabels(['HMO', 'hmo', 7, '', 'Garage'])).toEqual(['HMO', 'Garage']);
     expect(cleanLabels('nope')).toEqual([]);
     const all = allLabels([['Garage', 'BRR'], ['annex']]);
-    expect(all.slice(0, 6)).toEqual(['Potential flip', 'BRR', 'Buy-to-let', 'HMO', 'Needs work', 'Motivated seller']);
-    expect(all.slice(6)).toEqual(['annex', 'Garage']);
+    expect(all.slice(0, 7)).toEqual(['Potential flip', 'BRR', 'Buy-to-let', 'HMO', 'Needs work', 'Motivated seller', 'Do not contact']);
+    expect(all.slice(7)).toEqual(['annex', 'Garage']);
   });
 });
 

@@ -1,0 +1,300 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a1a2e;
+  background: #f8fafc;
+}
+
+#app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.btn {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #f1f5f9;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-small {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1e40af;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.nav-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.header h1 {
+  font-size: 22px;
+}
+
+h2 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+
+.hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.law {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.law summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.law ul {
+  margin: 8px 0 0 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.controls {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.controls .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.controls label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #334155;
+}
+
+.controls .grow {
+  flex: 1;
+}
+
+.controls .grow input {
+  flex: 1;
+}
+
+.controls input,
+.controls select,
+.controls textarea {
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+
+.controls textarea {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.notice {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+}
+
+.homes {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.homes li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.homes input {
+  margin-top: 3px;
+}
+
+.homes a {
+  color: #1e293b;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.homes a:hover {
+  text-decoration: underline;
+}
+
+.skip {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #b45309;
+}
+
+/* Letters: paper-like on screen, one per page when printed */
+.letters {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.letter {
+  padding: 18mm 18mm 22mm;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 11.5pt;
+  line-height: 1.5;
+  color: #111;
+}
+
+.letter-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 4px solid var(--brand, #1d4ed8);
+  text-align: right;
+  print-color-adjust: exact;
+}
+
+.letter-head img {
+  max-width: 45mm;
+  max-height: 18mm;
+  object-fit: contain;
+}
+
+.letter-contact {
+  font-size: 9.5pt;
+  color: #444;
+  white-space: pre-line;
+}
+
+.letter-to {
+  margin-top: 12mm;
+  font-style: normal;
+}
+
+.letter-date {
+  margin-top: 8mm;
+}
+
+.letter-body {
+  margin-top: 8mm;
+  white-space: pre-wrap;
+}
+
+.letter-signoff {
+  margin-top: 8mm;
+}
+
+.letter-name {
+  margin-top: 10mm;
+  font-weight: 600;
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  #app {
+    max-width: none;
+    padding: 0;
+  }
+
+  #app > :not(.letters) {
+    display: none !important;
+  }
+
+  .letters {
+    display: block;
+    margin: 0;
+  }
+
+  .letter {
+    min-height: 100vh;
+    border: 0;
+    border-radius: 0;
+    break-after: page;
+  }
+
+  .letter:last-child {
+    break-after: auto;
+  }
+}

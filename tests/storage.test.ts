@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
 import { chooseAddress, clearListings, deleteListing, getListings, saveListing } from '../src/services/storage';
-import { addActivity, getAgentNotes, getAllUserData, getUserData, logCall, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
+import { addActivity, getAgentNotes, getAllUserData, getUserData, logCall, logLetters, removeActivity, saveAgentNote, saveDealInputs, setHidden, setLabels, updatePipeline } from '../src/services/user-data';
 import { newActivity } from '../src/services/crm';
 
 /**
@@ -210,6 +210,14 @@ describe('labels, hiding, activity and agent notes', () => {
     const data = await getUserData('rightmove:1');
     expect(data.pipeline!.status).toBe('viewing');
     expect(data.activity!.map((a) => [a.kind, a.stage ?? null])).toEqual([['stage', 'viewing'], ['call', 'offer'], ['stage', 'viewing']]);
+  });
+
+  it('logs a letter on every home in one go', async () => {
+    await setLabels('zoopla:2', ['BRR']);
+    await logLetters(['rightmove:1', 'zoopla:2'], 'A buyer for your home', new Date('2026-10-24T12:00:00Z'));
+    const all = await getAllUserData();
+    expect(all['rightmove:1']!.activity!.map((a) => [a.kind, a.text])).toEqual([['letter', 'A buyer for your home']]);
+    expect(all['zoopla:2']).toMatchObject({ labels: ['BRR'], activity: [{ kind: 'letter' }] });
   });
 
   it('saves labels and hidden, and removes them when cleared', async () => {

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropSnap Letters</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <nav class="nav">
+      <a href="./dashboard.html" class="btn">← Dashboard</a>
+      <span class="nav-actions">
+        <button id="markSent" class="btn" type="button" disabled title="Add 'Letter sent' to each home's timeline">Mark as sent</button>
+        <button id="printBtn" class="btn btn-primary" type="button" disabled>Print letters</button>
+      </span>
+    </nav>
+
+    <header class="header">
+      <h1>Letters to owners</h1>
+      <p class="hint">One letter per page, addressed to "The Owner". Your logo and contact details come from Report options on any listing's Details page.</p>
+    </header>
+
+    <details class="law" open>
+      <summary>Before you send: writing to owners in the UK (not legal advice)</summary>
+      <ul>
+        <li>PropSnap writes to "The Owner", never to a named person. If you add names, for example from a Land Registry title, data protection law (UK GDPR) applies to how you get and use them.</li>
+        <li>Say who you are and how to reach you. Every starting letter tells the owner how to ask for no more letters.</li>
+        <li>If someone asks you to stop, stop. Give the home the "Do not contact" label and PropSnap leaves it out of every letter.</li>
+        <li>Be honest: do not claim a buyer, cash, a price or a deadline you do not have. If the home is with an estate agent, the owner's contract with that agent may still apply to a sale to you.</li>
+        <li>The Information Commissioner's Office (ico.org.uk) explains the rules on direct marketing.</li>
+      </ul>
+    </details>
+
+    <section class="controls" aria-label="Letter">
+      <div class="row">
+        <label>Letter <select id="template"></select></label>
+        <label class="grow">Name <input id="templateName" maxlength="60" /></label>
+        <button id="resetTemplate" class="btn btn-small" type="button">Back to the original wording</button>
+      </div>
+      <textarea id="templateBody" rows="10" maxlength="4000" aria-label="Letter text"></textarea>
+      <p class="hint">Filled in for each home: {street}, {address}, {date}, {your name}, {company}, {contact}.</p>
+      <div class="row">
+        <label>Your name <input id="senderName" maxlength="80" placeholder="Signs the letter" /></label>
+        <label>Sign off <input id="signOff" maxlength="80" /></label>
+        <span id="saved" class="hint" role="status"></span>
+      </div>
+      <p id="brandSummary" class="hint"></p>
+    </section>
+
+    <p id="empty" class="notice" hidden>No homes picked. Go to the dashboard, tick the homes to write to, then click Letters. Or open a home's Details page and click Write a letter.</p>
+
+    <section id="homesBox" hidden>
+      <h2>Homes</h2>
+      <ul id="homes" class="homes"></ul>
+    </section>
+
+    <section id="letters" class="letters" aria-label="Letters"></section>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
