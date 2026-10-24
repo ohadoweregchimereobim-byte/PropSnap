@@ -139,6 +139,11 @@ describe('saving listings', () => {
 
     await save();
     expect((await getListings())[0]!.area).toEqual(summary);
+    // The same summary again writes nothing
+    const set = vi.spyOn(chrome.storage.local, 'set');
+    await save();
+    expect(set).not.toHaveBeenCalled();
+    set.mockRestore();
     // Captured again with a corrected pin while the page was open: the old check is not saved on it
     await saveListing(listing('1', { latitude: 51.5, longitude: -3.17 }));
     expect((await getListings())[0]!.area).toBeUndefined();

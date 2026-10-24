@@ -24,6 +24,7 @@ import {
   labelsOf,
   pipelineOf,
   safeLink,
+  shownUserData,
   summarise,
   type SortKey,
   type ViewOptions,
@@ -126,7 +127,13 @@ async function init() {
     if (area !== 'local' || !(LISTINGS_KEY in changes || USER_DATA_KEY in changes || AGENTS_KEY in changes)) return;
     if (AGENTS_KEY in changes) { getAgentNotes().then((notes) => { agentNotes = notes; render(); }); return; }
     if (LISTINGS_KEY in changes) listings = (changes[LISTINGS_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
-    if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
+    if (USER_DATA_KEY in changes) {
+      const { oldValue, newValue } = changes[USER_DATA_KEY]!;
+      userData = (newValue as UserDataMap | undefined) ?? {};
+      // A listing page's calculator saves as the user types; the table has none of it
+      const unseen = shownUserData(oldValue as UserDataMap | undefined) === shownUserData(userData);
+      if (unseen && !(LISTINGS_KEY in changes)) return;
+    }
     render();
   });
 

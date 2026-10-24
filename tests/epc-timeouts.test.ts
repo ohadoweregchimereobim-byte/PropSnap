@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { enrichWithEpc } from '../src/services/epc-api';
+import { enrichWithEpc, retryAfterMs } from '../src/services/epc-api';
 
 function listing(): PropertyListing {
   return {
@@ -129,5 +129,48 @@ describe('certificate lookups after a refusal', () => {
     expect(lookups()).toBeGreaterThan(afterRefusal);
     expect(result.listing.fullAddress).toContain('Flat 1,');
     expect(result.listing.addressConfidence).toBe('exact');
+  });
+});
+
+describe('certificate lookups when rate limited', () => {
+  it('wait as long as the register asks, then start again', async () => {
+    // Hours on, so no pause from the tests above is left
+    const start = Date.now() + 3 * 60 * 60_000;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(start);
+
+    let limited = true;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/search')) return new Response(JSON.stringify({ data: [flat(1), flat(2), flat(3)] }));
+      if (limited) return new Response('', { status: 429, headers: { 'Retry-After': '30' } });
+      return new Response(JSON.stringify({ data: { total_floor_area: 60 } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const lookups = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/certificate')).length;
+
+    await enrichWithEpc('token', listing());
+    const afterLimit = lookups();
+    expect(afterLimit).toBeGreaterThan(0);
+
+    // Ten seconds on: still waiting
+    limited = false;
+    vi.setSystemTime(start + 10_000);
+    await enrichWithEpc('token', listing());
+    expect(lookups()).toBe(afterLimit);
+
+    // Forty seconds on: asking again
+    vi.setSystemTime(start + 40_000);
+    await enrichWithEpc('token', listing());
+    expect(lookups()).toBeGreaterThan(afterLimit);
+  });
+
+  it('reads Retry-After as seconds or a date', () => {
+    const now = Date.parse('2026-10-24T12:00:00Z');
+    expect(retryAfterMs('30', now)).toBe(30_000);
+    expect(retryAfterMs('Sat, 24 Oct 2026 12:02:00 GMT', now)).toBe(120_000);
+    expect(retryAfterMs(null, now)).toBe(60_000);
+    expect(retryAfterMs('soon', now)).toBe(60_000);
+    expect(retryAfterMs('0', now)).toBe(1000);
+    expect(retryAfterMs('86400', now)).toBe(10 * 60_000);
   });
 });

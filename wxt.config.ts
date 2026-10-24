@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'PropSnap',
     description: 'Capture full property details from UK listing sites',
-    version: '0.7.1',
+    version: '0.7.2',
     icons: {
       16: '/icons/icon-16.png',
       32: '/icons/icon-32.png',
@@ -20,7 +20,8 @@ export default defineConfig({
         128: '/icons/icon-128.png',
       },
     },
-    permissions: ['storage', 'activeTab'],
+    // unlimitedStorage: saved listings, notes and logos can pass Chrome's 10 MB limit for extension storage
+    permissions: ['storage', 'unlimitedStorage', 'activeTab'],
     host_permissions: [
       'https://www.rightmove.co.uk/*',
       'https://www.zoopla.co.uk/*',

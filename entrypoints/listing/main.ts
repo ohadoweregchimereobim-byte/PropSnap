@@ -13,7 +13,6 @@ import {
   logCall,
   getAgentNotes,
   getAllUserData,
-  getUserData,
   listingKey,
   removeActivity,
   saveAgentNote,
@@ -189,11 +188,13 @@ async function loadListing(firstLoad: boolean) {
     listing = found;
     showHeader();
     if (!listing) return;
+    // Read once; the change listener keeps it up to date after that
+    if (firstLoad) [allUserData, agentNotes] = await Promise.all([getAllUserData(), getAgentNotes()]);
 
     // Fill the form the first time, and when a new capture brings new
     // listing figures (the user's own numbers stay)
     if (firstLoad || before?.price !== listing.price || before?.postcode !== listing.postcode) {
-      const prefill = dealInputsFor(listing, (await getUserData(key)).deal);
+      const prefill = dealInputsFor(listing, allUserData[key]?.deal);
       regionSure = prefill.regionSure;
       fillForm(prefill.inputs);
     }
@@ -201,8 +202,7 @@ async function loadListing(firstLoad: boolean) {
     // Search again when the address changes; filters keep their setting
     if (firstLoad) {
       setTypeFilter();
-      fillPipeline(cleanPipeline((await getUserData(key)).pipeline));
-      [allUserData, agentNotes] = await Promise.all([getAllUserData(), getAgentNotes()]);
+      fillPipeline(cleanPipeline(allUserData[key]?.pipeline));
       fillAgentNote();
     }
     showCrm();

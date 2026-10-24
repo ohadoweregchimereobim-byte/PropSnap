@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { applyView, DEFAULT_VIEW, matchGroup, safeLink, summarise, areaFlags } from '../src/services/dashboard-view';
+import { applyView, DEFAULT_VIEW, matchGroup, safeLink, shownUserData, summarise, areaFlags } from '../src/services/dashboard-view';
 
 function listing(id: string, extra: Partial<PropertyListing> = {}): PropertyListing {
   return {
@@ -198,5 +198,15 @@ describe('safeLink', () => {
     expect(safeLink('https://www.rightmove.co.uk/properties/1')).toBe('https://www.rightmove.co.uk/properties/1');
     expect(safeLink('javascript:alert(1)')).toBeNull();
     expect(safeLink('')).toBeNull();
+  });
+});
+
+describe('shownUserData', () => {
+  it('ignores calculator numbers, which the table does not show', () => {
+    const before = { 'zoopla:1': { deal: { price: 280_000 }, labels: ['BRR'] } };
+    expect(shownUserData({ 'zoopla:1': { deal: { price: 275_000 }, labels: ['BRR'] } })).toBe(shownUserData(before));
+    expect(shownUserData({ 'zoopla:1': { deal: { price: 280_000 }, labels: ['BRR', 'HMO'] } })).not.toBe(shownUserData(before));
+    expect(shownUserData({ ...before, 'zoopla:2': { hidden: true } })).not.toBe(shownUserData(before));
+    expect(shownUserData(undefined)).toBe(shownUserData({}));
   });
 });

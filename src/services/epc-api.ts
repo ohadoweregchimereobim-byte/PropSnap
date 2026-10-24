@@ -24,11 +24,14 @@ const EPC_API_BASE = `${EPC_API_ROOT}/api/domestic/search`;
 
 // Full certificate: dwelling_type, habitable_room_count, total_floor_area.
 // If it answers 400/404/405, or does not answer in time, we stop asking for
-// details for a while and rank on address alone.
+// details for a while and rank on address alone; after a 429, for as long as
+// the register asks.
 const EPC_CERTIFICATE_URL = `${EPC_API_ROOT}/api/certificate`;
 
 /** How long certificate lookups stay off after one of those answers */
 const LOOKUP_PAUSE_MS = 10 * 60_000;
+/** After "too many requests" (429): the wait the register asks for, else a minute, never over the pause above */
+const RATE_LIMIT_PAUSE_MS = 60_000;
 
 /** A request with no answer by then is given up, so the popup never waits forever */
 const SEARCH_TIMEOUT_MS = 15_000;
@@ -251,6 +254,13 @@ async function getCertificate(token: string, certificateNumber: string): Promise
       lookupsPausedUntil = Date.now() + LOOKUP_PAUSE_MS;
       return null;
     }
+    // Asking again straight away only makes the limit last longer
+    if (response.status === 429) {
+      const wait = retryAfterMs(response.headers.get('Retry-After'), Date.now());
+      console.warn(`PropSnap: certificate lookups rate limited, ranking on address only for ${Math.ceil(wait / 1000)} seconds`);
+      lookupsPausedUntil = Date.now() + wait;
+      return null;
+    }
     if (!response.ok) return null;
     return await response.json();
   } catch (error) {
@@ -259,6 +269,17 @@ async function getCertificate(token: string, certificateNumber: string): Promise
     console.warn('PropSnap: certificate lookup failed:', error);
     return null;
   }
+}
+
+/**
+ * How long to wait after a 429: Retry-After in seconds or as a date, else a
+ * minute; at least a second and at most the full pause
+ */
+export function retryAfterMs(header: string | null, now: number): number {
+  const text = (header ?? '').trim();
+  const asked = /^\d+$/.test(text) ? Number(text) * 1000 : text ? Date.parse(text) - now : NaN;
+  const wait = Number.isFinite(asked) ? asked : RATE_LIMIT_PAUSE_MS;
+  return Math.min(Math.max(wait, 1000), LOOKUP_PAUSE_MS);
 }
 
 /** Keep both readings of a certificate, so the other one never needs a second lookup */
