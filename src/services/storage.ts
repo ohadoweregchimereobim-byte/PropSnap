@@ -3,6 +3,7 @@ import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, statusLabel } from './pipeline';
 import { priceChange, withPriceHistory } from './price-history';
+import { withLock } from './storage-lock';
 
 const STORAGE_KEY = 'propsnap_listings';
 const SETTINGS_KEY = 'propsnap_settings';
@@ -24,22 +25,24 @@ const DEFAULT_SETTINGS: PropSnapSettings = {
  * Returns the listing as saved (a home the user picked earlier, and the
  * prices seen before, are kept).
  */
-export async function saveListing(listing: PropertyListing): Promise<PropertyListing> {
-  const existing = await getListings();
+export function saveListing(listing: PropertyListing): Promise<PropertyListing> {
+  return withLock(STORAGE_KEY, async () => {
+    const existing = await getListings();
 
-  // Deduplicate by listingId + source
-  const key = `${listing.source}:${listing.listingId}`;
-  const previous = existing.find((l) => `${l.source}:${l.listingId}` === key);
-  const filtered = existing.filter(
-    (l) => `${l.source}:${l.listingId}` !== key
-  );
+    // Deduplicate by listingId + source
+    const key = `${listing.source}:${listing.listingId}`;
+    const previous = existing.find((l) => `${l.source}:${l.listingId}` === key);
+    const filtered = existing.filter(
+      (l) => `${l.source}:${l.listingId}` !== key
+    );
 
-  // Keep the user's pick of home, and every price seen before
-  const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
-  filtered.unshift(saved); // Most recent first
+    // Keep the user's pick of home, and every price seen before
+    const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
+    filtered.unshift(saved); // Most recent first
 
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
-  return saved;
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+    return saved;
+  });
 }
 
 /**
@@ -53,25 +56,29 @@ export async function getListings(): Promise<PropertyListing[]> {
 /**
  * Set a saved listing's full address to the close home the user picked.
  */
-export async function chooseAddress(source: string, listingId: string, certificateNumber: string): Promise<void> {
-  const existing = await getListings();
-  const index = existing.findIndex((l) => l.source === source && l.listingId === listingId);
-  if (index === -1) throw new Error('Listing not found');
+export function chooseAddress(source: string, listingId: string, certificateNumber: string): Promise<void> {
+  return withLock(STORAGE_KEY, async () => {
+    const existing = await getListings();
+    const index = existing.findIndex((l) => l.source === source && l.listingId === listingId);
+    if (index === -1) throw new Error('Listing not found');
 
-  existing[index] = chooseCandidate(existing[index]!, certificateNumber);
-  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+    existing[index] = chooseCandidate(existing[index]!, certificateNumber);
+    await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+  });
 }
 
 /**
  * Delete a listing from storage, with what the user typed in for it.
  */
 export async function deleteListing(source: string, listingId: string): Promise<void> {
-  const existing = await getListings();
   const key = `${source}:${listingId}`;
-  const filtered = existing.filter(
-    (l) => `${l.source}:${l.listingId}` !== key
-  );
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withLock(STORAGE_KEY, async () => {
+    const existing = await getListings();
+    const filtered = existing.filter(
+      (l) => `${l.source}:${l.listingId}` !== key
+    );
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
   await removeUserData(key);
 }
 
@@ -79,7 +86,7 @@ export async function deleteListing(source: string, listingId: string): Promise<
  * Clear all saved listings, and what the user typed in for them.
  */
 export async function clearListings(): Promise<void> {
-  await chrome.storage.local.remove(STORAGE_KEY);
+  await withLock(STORAGE_KEY, () => chrome.storage.local.remove(STORAGE_KEY));
   await clearUserData();
 }
 
@@ -94,10 +101,12 @@ export async function getSettings(): Promise<PropSnapSettings> {
 /**
  * Save extension settings.
  */
-export async function saveSettings(settings: Partial<PropSnapSettings>): Promise<void> {
-  const current = await getSettings();
-  await chrome.storage.local.set({
-    [SETTINGS_KEY]: { ...current, ...settings },
+export function saveSettings(settings: Partial<PropSnapSettings>): Promise<void> {
+  return withLock(SETTINGS_KEY, async () => {
+    const current = await getSettings();
+    await chrome.storage.local.set({
+      [SETTINGS_KEY]: { ...current, ...settings },
+    });
   });
 }
 

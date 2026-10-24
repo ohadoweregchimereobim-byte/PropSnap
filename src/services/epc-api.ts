@@ -21,9 +21,16 @@ const EPC_API_ROOT = 'https://api.get-energy-performance-data.communities.gov.uk
 const EPC_API_BASE = `${EPC_API_ROOT}/api/domestic/search`;
 
 // Full certificate: dwelling_type, habitable_room_count, total_floor_area.
-// If it answers 400/404/405 we stop asking for details for the rest of the
-// session and rank on address alone.
+// If it answers 400/404/405 we stop asking for details for a while and rank
+// on address alone.
 const EPC_CERTIFICATE_URL = `${EPC_API_ROOT}/api/certificate`;
+
+/** How long certificate lookups stay off after one of those answers */
+const LOOKUP_PAUSE_MS = 10 * 60_000;
+
+/** A request with no answer by then is given up, so the popup never waits forever */
+const SEARCH_TIMEOUT_MS = 15_000;
+const CERTIFICATE_TIMEOUT_MS = 10_000;
 
 /** Most certificate lookups per capture, to stay clear of the rate limit */
 const MAX_DETAIL_LOOKUPS = 10;
@@ -65,6 +72,12 @@ export async function searchEpc(
       'Accept': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
+    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+  }).catch((error: unknown) => {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error(`EPC API did not answer in ${SEARCH_TIMEOUT_MS / 1000} seconds. Try again in a moment`);
+    }
+    throw error;
   });
 
   // The API answers 404 when no certificates match the search
@@ -202,7 +215,10 @@ export function readDetails(body: unknown): Pick<EpcResult, 'propertyType' | 'bu
   return details;
 }
 
-let certificateLookupUnavailable = false;
+// Date.now() before which certificate lookups are skipped. The service worker
+// can restart at any time, so this is a pause, not an off switch.
+let lookupsPausedUntil = 0;
+const lookupsPaused = () => Date.now() < lookupsPausedUntil;
 
 /**
  * Fetch one certificate's details. Returns null when the lookup fails, so a
@@ -212,7 +228,7 @@ export async function fetchCertificateDetails(
   token: string,
   certificateNumber: string
 ): Promise<ReturnType<typeof readDetails> | null> {
-  if (certificateLookupUnavailable || !certificateNumber) return null;
+  if (lookupsPaused() || !certificateNumber) return null;
 
   try {
     const url = `${EPC_CERTIFICATE_URL}?${new URLSearchParams({ certificate_number: certificateNumber })}`;
@@ -221,11 +237,12 @@ export async function fetchCertificateDetails(
         'Accept': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
+      signal: AbortSignal.timeout(CERTIFICATE_TIMEOUT_MS),
     });
 
     if ([400, 404, 405].includes(response.status)) {
-      console.warn(`PropSnap: certificate lookup answered ${response.status}, ranking on address only`);
-      certificateLookupUnavailable = true;
+      console.warn(`PropSnap: certificate lookup answered ${response.status}, ranking on address only for ${LOOKUP_PAUSE_MS / 60_000} minutes`);
+      lookupsPausedUntil = Date.now() + LOOKUP_PAUSE_MS;
       return null;
     }
     if (!response.ok) return null;
@@ -272,7 +289,7 @@ async function addDetailsToCloseCalls(
       const d = fetched[j];
       if (d) details.set(r, d);
     });
-    if (certificateLookupUnavailable) break;
+    if (lookupsPaused()) break;
   }
 
   const withDetails = (r: EpcResult) => (details.has(r) ? { ...r, ...details.get(r) } : r);

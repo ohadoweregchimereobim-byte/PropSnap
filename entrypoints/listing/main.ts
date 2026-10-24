@@ -7,7 +7,7 @@
  */
 import type { PropertyListing } from '../../src/adapters/types';
 import { getListings } from '../../src/services/storage';
-import { getUserData, listingKey, saveDealInputs, savePipeline } from '../../src/services/user-data';
+import { getUserData, listingKey, saveDealInputs, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import { cleanPipeline, followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { safeLink } from '../../src/services/dashboard-view';
 import {
@@ -38,6 +38,11 @@ const key = new URLSearchParams(location.search).get('key') ?? '';
 let listing: PropertyListing | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let pipelineTimer: ReturnType<typeof setTimeout> | undefined;
+// Pipeline fields changed here and not saved yet. Only these are saved, so a
+// change saved elsewhere (the dashboard's stage drop-down, another tab) is
+// kept, and shows here unless the user is changing that same field.
+type PipelineField = 'status' | 'followUp' | 'notes';
+const unsaved = new Set<PipelineField>();
 // False when the postcode is on the England and Wales border and the user has not picked a country
 let regionSure = true;
 // Sold prices for this listing; null until loaded
@@ -87,7 +92,12 @@ async function init() {
 
   // A new capture or a delete in another tab changes the listing
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && LISTINGS_KEY in changes) loadListing(false);
+    if (area !== 'local') return;
+    if (LISTINGS_KEY in changes) loadListing(false);
+    if (USER_DATA_KEY in changes) {
+      const all = (changes[USER_DATA_KEY]!.newValue ?? {}) as UserDataMap;
+      refreshPipeline(cleanPipeline(all[key]?.pipeline));
+    }
   });
 
   await loadListing(true);
@@ -173,17 +183,18 @@ function setUpPipeline() {
     option.textContent = s.label;
     return option;
   }));
-  const later = () => {
+  const later = (field: PipelineField) => {
+    unsaved.add(field);
     showDue();
     clearTimeout(pipelineTimer);
     pipelineTimer = setTimeout(saveThePipeline, 500);
   };
-  $('pipelineStatus').addEventListener('change', later);
-  $('pipelineFollowUp').addEventListener('change', later);
-  $('pipelineNotes').addEventListener('input', later);
+  $('pipelineStatus').addEventListener('change', () => later('status'));
+  $('pipelineFollowUp').addEventListener('change', () => later('followUp'));
+  $('pipelineNotes').addEventListener('input', () => later('notes'));
   $('pipelineClearDate').addEventListener('click', () => {
     ($('pipelineFollowUp') as HTMLInputElement).value = '';
-    later();
+    later('followUp');
   });
 }
 
@@ -192,6 +203,18 @@ function fillPipeline(p: ReturnType<typeof cleanPipeline>) {
   ($('pipelineFollowUp') as HTMLInputElement).value = p?.followUp ?? '';
   ($('pipelineNotes') as HTMLTextAreaElement).value = p?.notes ?? '';
   $('pipelineSaved').textContent = p?.updatedAt ? `Last saved ${new Date(p.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+  showDue();
+}
+
+/** Show a pipeline saved elsewhere, leaving alone what the user is still typing here */
+function refreshPipeline(p: ReturnType<typeof cleanPipeline>) {
+  const set = (field: PipelineField, el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) => {
+    // Writing the same text back would move the cursor in the notes box
+    if (!unsaved.has(field) && el.value !== value) el.value = value;
+  };
+  set('status', $('pipelineStatus') as HTMLSelectElement, p?.status ?? 'new');
+  set('followUp', $('pipelineFollowUp') as HTMLInputElement, p?.followUp ?? '');
+  set('notes', $('pipelineNotes') as HTMLTextAreaElement, p?.notes ?? '');
   showDue();
 }
 
@@ -214,10 +237,14 @@ function showDue() {
 }
 
 async function saveThePipeline() {
+  const saving = [...unsaved];
+  unsaved.clear();
+  const typed = readPipeline();
   try {
-    await savePipeline(key, readPipeline());
+    await updatePipeline(key, Object.fromEntries(saving.map((field) => [field, typed[field]])));
     $('pipelineSaved').textContent = 'Saved';
   } catch (error: any) {
+    for (const field of saving) unsaved.add(field);
     $('pipelineSaved').textContent = `Could not save: ${error.message}`;
   }
 }
