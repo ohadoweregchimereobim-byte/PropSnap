@@ -13,8 +13,8 @@ import {
   logCall,
   getAgentNotes,
   getAllUserData,
-  getUserData,
   listingKey,
+  onlyDealsChanged,
   removeActivity,
   saveAgentNote,
   saveDealInputs,
@@ -158,10 +158,11 @@ async function init() {
       getAgentNotes().then((notes) => { agentNotes = notes; fillAgentNote(); showCrm(); });
     }
     if (USER_DATA_KEY in changes) {
-      allUserData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
-      showCrm();
-      const pipelineIn = (value: unknown) => JSON.stringify((value as UserDataMap | undefined)?.[key]?.pipeline ?? null);
       const { oldValue, newValue } = changes[USER_DATA_KEY]!;
+      allUserData = (newValue as UserDataMap | undefined) ?? {};
+      // The calculator saves as the user types; nothing shown here changes then
+      if (!onlyDealsChanged(oldValue as UserDataMap | undefined, allUserData)) showCrm();
+      const pipelineIn = (value: unknown) => JSON.stringify((value as UserDataMap | undefined)?.[key]?.pipeline ?? null);
       // Calculator saves change user data too; only a new pipeline is shown
       if (pipelineIn(oldValue) !== pipelineIn(newValue)) {
         refreshPipeline(cleanPipeline((newValue as UserDataMap | undefined)?.[key]?.pipeline));
@@ -183,26 +184,29 @@ async function init() {
 
 async function loadListing(firstLoad: boolean) {
   try {
-    allListings = await getListings();
+    // User data and agent notes are read once; the change listener keeps them up to date after that
+    if (firstLoad) [allListings, allUserData, agentNotes] = await Promise.all([getListings(), getAllUserData(), getAgentNotes()]);
+    else allListings = await getListings();
     const found = allListings.find((l) => listingKey(l) === key) ?? null;
     const before = listing;
     listing = found;
     showHeader();
     if (!listing) return;
+    // The first time a listing is shown, also when it was saved after the page opened
+    const firstShown = !before;
 
     // Fill the form the first time, and when a new capture brings new
     // listing figures (the user's own numbers stay)
-    if (firstLoad || before?.price !== listing.price || before?.postcode !== listing.postcode) {
-      const prefill = dealInputsFor(listing, (await getUserData(key)).deal);
+    if (firstShown || before?.price !== listing.price || before?.postcode !== listing.postcode) {
+      const prefill = dealInputsFor(listing, allUserData[key]?.deal);
       regionSure = prefill.regionSure;
       fillForm(prefill.inputs);
     }
 
     // Search again when the address changes; filters keep their setting
-    if (firstLoad) {
+    if (firstShown) {
       setTypeFilter();
-      fillPipeline(cleanPipeline((await getUserData(key)).pipeline));
-      [allUserData, agentNotes] = await Promise.all([getAllUserData(), getAgentNotes()]);
+      fillPipeline(cleanPipeline(allUserData[key]?.pipeline));
       fillAgentNote();
     }
     showCrm();

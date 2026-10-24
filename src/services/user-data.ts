@@ -24,6 +24,27 @@ export type UserDataMap = Record<string, ListingUserData>;
 
 export const listingKey = (l: { source: string; listingId: string }) => `${l.source}:${l.listingId}`;
 
+/**
+ * True when two copies of the user data differ only in calculator numbers,
+ * which no table or list shows: the calculator saves as the user types, and
+ * pages that redraw on a change can skip those. Timelines are compared by
+ * their entries' ids, as an entry is only ever added or removed.
+ */
+export function onlyDealsChanged(before: UserDataMap | undefined, after: UserDataMap | undefined): boolean {
+  const a = before ?? {};
+  const b = after ?? {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (shownPart(a[key]) !== shownPart(b[key])) return false;
+  }
+  return true;
+}
+
+function shownPart(entry: ListingUserData | undefined): string {
+  if (!entry || typeof entry !== 'object') return JSON.stringify(entry ?? null);
+  const { deal: _deal, activity, ...shown } = entry;
+  return JSON.stringify([shown, Array.isArray(activity) ? activity.map((a) => a?.id) : activity ?? null]);
+}
+
 export async function getAllUserData(): Promise<UserDataMap> {
   const data = await chrome.storage.local.get(USER_DATA_KEY);
   return (data[USER_DATA_KEY] as UserDataMap | undefined) ?? {};

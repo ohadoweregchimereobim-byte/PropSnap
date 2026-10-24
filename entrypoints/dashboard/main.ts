@@ -26,7 +26,7 @@ import {
 } from '../../src/services/backup';
 import { daysOnMarket, describeChange, describeDays, describePortalChanges, latestPortalChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
-import { getAgentNotes, getAllUserData, listingKey, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import { getAgentNotes, getAllUserData, listingKey, onlyDealsChanged, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import { AGENTS_KEY, allLabels, cleanActivity, cleanLabels, groupByAgent, lastCall, outcomeLabel, whenText, type AgentNotes } from '../../src/services/crm';
 import {
   applyView,
@@ -140,7 +140,12 @@ async function init() {
     if (area !== 'local' || !(LISTINGS_KEY in changes || USER_DATA_KEY in changes || AGENTS_KEY in changes)) return;
     // A restore changes all three at once, so take every one before drawing
     if (LISTINGS_KEY in changes) listings = (changes[LISTINGS_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
-    if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
+    if (USER_DATA_KEY in changes) {
+      const { oldValue, newValue } = changes[USER_DATA_KEY]!;
+      userData = (newValue as UserDataMap | undefined) ?? {};
+      // A listing page's calculator saves as the user types; the table has none of it
+      if (onlyDealsChanged(oldValue as UserDataMap | undefined, userData) && !(LISTINGS_KEY in changes) && !(AGENTS_KEY in changes)) return;
+    }
     if (AGENTS_KEY in changes) getAgentNotes().then((notes) => { agentNotes = notes; render(); });
     else render();
   });

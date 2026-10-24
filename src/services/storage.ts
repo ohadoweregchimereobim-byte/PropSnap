@@ -116,8 +116,10 @@ export function setAreaSummary(
     const index = existing.findIndex((l) => listingKey(l) === listingKey({ source, listingId }));
     if (index === -1) return;
     const current = existing[index]!;
-    const next = typeof area === 'function' ? area(cleanAreaSummary(current.area), current) : area;
-    if (!next) return;
+    const saved = cleanAreaSummary(current.area);
+    const next = typeof area === 'function' ? area(saved, current) : area;
+    // Opening the page again shows the kept answer: nothing new to write, and no redraw elsewhere
+    if (!next || JSON.stringify(cleanAreaSummary(next)) === JSON.stringify(saved)) return;
     existing[index] = { ...current, area: next };
     await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
   });
