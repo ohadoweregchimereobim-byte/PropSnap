@@ -6,8 +6,8 @@
  * - Badge updates to show when user is on a listing page
  * - Storage coordination
  */
-import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
-import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
+import { enrichWithEpc, fetchCertificateEnergy, findCertificateNumber, type EnrichmentResult } from '../src/services/epc-api';
+import { saveListing, getSettings, getListings, listingsToCsv, setEpcEnergy } from '../src/services/storage';
 import { reuseKnownAddress } from '../src/services/address-choice';
 import { getAllUserData } from '../src/services/user-data';
 import type { PropertyListing } from '../src/adapters/types';
@@ -36,6 +36,13 @@ export default defineBackground(() => {
       return true; // Async response
     }
 
+    if (message.type === 'LOAD_EPC_ENERGY') {
+      loadEpcEnergy(message.source, message.listingId)
+        .then((listing) => sendResponse({ success: true, listing }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
+
     if (message.type === 'EXPORT_CSV') {
       Promise.all([getListings(), getAllUserData()])
         .then(([listings, userData]) => sendResponse({ success: true, csv: listingsToCsv(listings, userData) }))
@@ -46,6 +53,23 @@ export default defineBackground(() => {
 
   console.log('PropSnap: Background service worker started');
 });
+
+/**
+ * Read the EPC energy figures for a saved listing's home and keep them on the
+ * listing. For listings captured before the certificate number was kept.
+ */
+async function loadEpcEnergy(source: string, listingId: string): Promise<PropertyListing | null> {
+  const settings = await getSettings();
+  if (!settings.epcApiToken) throw new Error('Add your EPC API token in the PropSnap popup settings first');
+  const listing = (await getListings()).find((l) => l.source === source && l.listingId === listingId);
+  if (!listing) throw new Error('This listing is not saved any more');
+
+  const certificate = await findCertificateNumber(settings.epcApiToken, listing);
+  if (!certificate) throw new Error('No EPC certificate was found for this address');
+  const energy = await fetchCertificateEnergy(settings.epcApiToken, certificate);
+  if (!energy) throw new Error('The EPC register did not answer with this certificate. Try again in a few minutes');
+  return setEpcEnergy(source, listingId, energy);
+}
 
 /**
  * Capture a listing, optionally enrich with EPC data, and save.
@@ -69,6 +93,11 @@ async function handleCaptureAndEnrich(
 
     console.log('PropSnap: Starting EPC enrichment...');
     const result = await enrichWithEpc(settings.epcApiToken, listing);
+    // The matched home's rating now and potential (cached, so a re-capture costs nothing)
+    const certificate = result.listing.epcCertificateNumber;
+    if (certificate && result.listing.epcEnergy?.certificateNumber !== certificate) {
+      result.listing = { ...result.listing, epcEnergy: await fetchCertificateEnergy(settings.epcApiToken, certificate) };
+    }
     console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');
     // Keep the explanation with the listing so the CSV can show it later
     result.listing = await saveListing({ ...result.listing, enrichmentDetail: result.enrichmentDetail ?? null });

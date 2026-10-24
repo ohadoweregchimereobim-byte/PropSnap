@@ -3,7 +3,8 @@ import { formatMoney, SITE_NAMES } from './format';
 import type { BrrResult, BuyToLetResult, DealInputs } from './calculators';
 import { describeChange, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
-import { FEW_SALES, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
+import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
+import { bandForScore, describeEnergy, lowWithPotential } from './epc-energy';
 
 /**
  * The property report: what the listing page knows, laid out for print or
@@ -71,6 +72,10 @@ function propertySection(l: PropertyListing): ReportSection {
       ['Type', l.propertyType],
       ['Floor area', l.floorAreaSqm ? `${l.floorAreaSqm} m²${l.floorAreaSource === 'text' ? ' (from the description)' : ''}` : null],
       ['EPC rating', l.epcRating],
+      ['EPC certificate', l.epcEnergy
+        ? `${describeEnergy(l.epcEnergy)}, now to potential${l.epcEnergy.registrationDate ? ` (certificate ${date(l.epcEnergy.registrationDate)})` : ''}`
+          + `${l.addressConfidence === 'best_guess' ? ', for the best-guess home' : ''}`
+        : null],
       ['Tenure', l.tenure],
       ['Furnished', l.furnished],
       ['Deposit', l.deposit ? formatMoney(l.deposit) : null],
@@ -174,13 +179,63 @@ function dealSections({ inputs, btl, brr }: ReportInput['deal']): ReportSection[
   return sections;
 }
 
+function energySection(l: PropertyListing): ReportSection | null {
+  const e = l.epcEnergy;
+  if (!e || e.improvements.length === 0) return null;
+  return {
+    heading: 'Energy improvements',
+    notes: [
+      ...(lowWithPotential(e) ? ['Low rating with high potential: priced for its rating today, and lettable once improved.'] : []),
+      'From the home\'s EPC certificate. Costs and savings are the assessor\'s typical figures from when the certificate was made.',
+    ],
+    table: {
+      head: ['Improvement', 'Typical cost', 'Saving a year', 'Rating after'],
+      numeric: [2, 3],
+      rows: e.improvements.map((i) => [
+        i.name,
+        i.cost ?? '—',
+        i.saving != null ? formatMoney(i.saving) : '—',
+        i.ratingAfter != null ? `${i.ratingAfter} (${bandForScore(i.ratingAfter)})` : '—',
+      ]),
+    },
+  };
+}
+
+function flipSection(sold: NonNullable<ReportInput['sold']>): ReportSection | null {
+  const flips = sold.view.flips;
+  if (flips.length === 0) return null;
+  return {
+    heading: 'Flipped nearby',
+    notes: [
+      `${flips.length} home${flips.length === 1 ? ' was' : 's were'} resold within ${FLIP_MONTHS / 12} years for ${FLIP_MIN_RISE_PCT}% or more `
+        + `(filters: ${sold.filters}). Median rise ${median(flips.map((f) => f.risePct))!.toFixed(0)}%.`,
+    ],
+    table: {
+      head: ['Address', 'Bought', 'Sold', 'Rise'],
+      numeric: [3],
+      rows: flips.slice(0, SOLD_ROWS).map((f) => [
+        `${saleAddress(f.sold)}${f.sold.postcode ? ` ${f.sold.postcode}` : ''}`,
+        `${formatMoney(f.bought.price)}, ${monthYear(f.bought.date)}`,
+        `${formatMoney(f.sold.price)}, ${monthYear(f.sold.date)}`,
+        `+${formatMoney(f.rise)} (${f.risePct.toFixed(0)}%)`,
+      ]),
+    },
+  };
+}
+
 export function buildReport(input: ReportInput): Report {
   const l = input.listing;
   const sections: ReportSection[] = [propertySection(l)];
 
+  const energy = energySection(l);
+  if (energy) sections.push(energy);
   const prices = priceSection(l);
   if (prices) sections.push(prices);
-  if (input.sold) sections.push(soldSection(input.sold, l));
+  if (input.sold) {
+    sections.push(soldSection(input.sold, l));
+    const flips = flipSection(input.sold);
+    if (flips) sections.push(flips);
+  }
   sections.push(...dealSections(input.deal));
 
   if (input.includeNotes && input.pipeline) {

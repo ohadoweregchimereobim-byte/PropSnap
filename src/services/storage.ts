@@ -1,4 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
+import type { EpcEnergy } from './epc-energy';
 import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, statusLabel } from './pipeline';
@@ -63,6 +64,26 @@ export function chooseAddress(source: string, listingId: string, certificateNumb
 
     existing[index] = chooseCandidate(existing[index]!, certificateNumber);
     await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
+  });
+}
+
+/**
+ * Keep the EPC certificate and its energy figures on a saved listing, as long
+ * as the listing still points at the same home.
+ */
+export function setEpcEnergy(source: string, listingId: string, energy: EpcEnergy): Promise<PropertyListing | null> {
+  return withLock(LISTINGS_KEY, async () => {
+    const existing = await getListings();
+    const key = listingKey({ source, listingId });
+    const index = existing.findIndex((l) => listingKey(l) === key);
+    if (index === -1) return null;
+    const current = existing[index]!;
+    // The user may have picked another home while the lookup ran
+    if (current.epcCertificateNumber && current.epcCertificateNumber !== energy.certificateNumber) return current;
+
+    existing[index] = { ...current, epcCertificateNumber: energy.certificateNumber, epcEnergy: energy };
+    await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
+    return existing[index]!;
   });
 }
 
@@ -143,6 +164,8 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     'Agent Branch',
     'Phone',
     'EPC Rating',
+    'EPC Certificate Now',
+    'EPC Potential',
     'Latitude',
     'Longitude',
     'Captured At',
@@ -181,6 +204,9 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     l.agentBranch ?? '',
     l.agentPhone ?? '',
     l.epcRating ?? '',
+    // "E 50" and "C 72": band and score from the matched home's certificate
+    [l.epcEnergy?.currentBand, l.epcEnergy?.currentScore].filter((x) => x != null).join(' '),
+    [l.epcEnergy?.potentialBand, l.epcEnergy?.potentialScore].filter((x) => x != null).join(' '),
     l.latitude?.toString() ?? '',
     l.longitude?.toString() ?? '',
     l.capturedAt,

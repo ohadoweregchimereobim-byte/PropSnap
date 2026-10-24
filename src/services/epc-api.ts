@@ -2,6 +2,7 @@ import type { AddressCandidate, EpcResult, PropertyListing } from '../adapters/t
 import { closeCalls, extractNumbers, findBestMatch, latestPerHome, normalisePostcode, scoreCandidates } from './epc-match';
 import type { EpcMatch } from './epc-match';
 import { readCache, writeCache } from './session-cache';
+import { readEnergy, type EpcEnergy } from './epc-energy';
 
 /**
  * EPC Register API client
@@ -230,19 +231,11 @@ let lookupsPausedUntil = 0;
 const lookupsPaused = () => Date.now() < lookupsPausedUntil;
 
 /**
- * Fetch one certificate's details. Returns null when the lookup fails, so a
- * missing detail never stops the capture.
+ * One certificate's full answer, or null when the lookup fails or is paused,
+ * so a missing certificate never stops the capture.
  */
-export async function fetchCertificateDetails(
-  token: string,
-  certificateNumber: string
-): Promise<ReturnType<typeof readDetails> | null> {
-  if (!certificateNumber) return null;
-  const cacheKey = `cert:${certificateNumber}`;
-  const kept = await readCache<ReturnType<typeof readDetails>>(cacheKey);
-  if (kept) return kept.value;
-  if (lookupsPaused()) return null;
-
+async function getCertificate(token: string, certificateNumber: string): Promise<unknown | null> {
+  if (!certificateNumber || lookupsPaused()) return null;
   try {
     const url = `${EPC_CERTIFICATE_URL}?${new URLSearchParams({ certificate_number: certificateNumber })}`;
     const response = await fetch(url, {
@@ -259,17 +252,62 @@ export async function fetchCertificateDetails(
       return null;
     }
     if (!response.ok) return null;
-
-    const details = readDetails(await response.json());
-    // An answer with none of the fields may be a passing fault; ask again next time
-    if (Object.keys(details).length > 0) await writeCache(cacheKey, details, CERTIFICATE_CACHE_MS);
-    return details;
+    return await response.json();
   } catch (error) {
     // A lookup that hangs would make every capture wait 10 s per pair, so pause them too
     if (isTimeout(error)) lookupsPausedUntil = Date.now() + LOOKUP_PAUSE_MS;
     console.warn('PropSnap: certificate lookup failed:', error);
     return null;
   }
+}
+
+/** Keep both readings of a certificate, so the other one never needs a second lookup */
+async function keepCertificate(certificateNumber: string, body: unknown) {
+  const details = readDetails(body);
+  const energy = readEnergy(body, certificateNumber);
+  // An answer with none of the fields may be a passing fault; ask again next time
+  if (Object.keys(details).length > 0) await writeCache(`cert:${certificateNumber}`, details, CERTIFICATE_CACHE_MS);
+  if (energy) await writeCache(`energy:${certificateNumber}`, energy, CERTIFICATE_CACHE_MS);
+  return { details, energy };
+}
+
+/** One certificate's property type, form, floor area and rooms; null when the lookup fails */
+export async function fetchCertificateDetails(
+  token: string,
+  certificateNumber: string
+): Promise<ReturnType<typeof readDetails> | null> {
+  if (!certificateNumber) return null;
+  const kept = await readCache<ReturnType<typeof readDetails>>(`cert:${certificateNumber}`);
+  if (kept) return kept.value;
+  const body = await getCertificate(token, certificateNumber);
+  return body == null ? null : (await keepCertificate(certificateNumber, body)).details;
+}
+
+/** One certificate's rating now and potential, with its improvements; null when the lookup fails */
+export async function fetchCertificateEnergy(token: string, certificateNumber: string): Promise<EpcEnergy | null> {
+  if (!certificateNumber) return null;
+  const kept = await readCache<EpcEnergy>(`energy:${certificateNumber}`);
+  if (kept) return kept.value;
+  const body = await getCertificate(token, certificateNumber);
+  return body == null ? null : (await keepCertificate(certificateNumber, body)).energy;
+}
+
+/**
+ * The certificate of the home a listing's full address is. Listings saved
+ * before the number was kept get it from their close homes, or by searching
+ * the postcode for the same address. Null when it cannot be found.
+ */
+export async function findCertificateNumber(token: string, listing: PropertyListing): Promise<string | null> {
+  if (listing.epcCertificateNumber) return listing.epcCertificateNumber;
+  if (!listing.fullAddress) return null;
+  const same = (address: string) => address.trim().toLowerCase() === listing.fullAddress!.trim().toLowerCase();
+
+  const candidate = (listing.addressCandidates ?? []).find((c) => same(c.fullAddress));
+  if (candidate) return candidate.certificateNumber;
+  if (!isFullPostcode(listing.postcode)) return null;
+
+  const found = latestPerHome(await searchEpc(token, { postcode: listing.postcode })).find((r) => same(fullAddressOf(r)));
+  return found?.certificateNumber ?? null;
 }
 
 interface DetailPass {
@@ -441,6 +479,7 @@ export async function enrichWithEpc(
           ...listing,
           fullAddress,
           addressConfidence: match.confidence,
+          epcCertificateNumber: result.certificateNumber || null,
           // On a best guess, keep the close homes so the user can pick the right one
           addressCandidates: match.confidence === 'best_guess' && match.others.length > 0
             ? [result, ...match.others].slice(0, MAX_CANDIDATES).map(toCandidate)

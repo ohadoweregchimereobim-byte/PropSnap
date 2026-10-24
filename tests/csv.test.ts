@@ -84,4 +84,11 @@ describe('listingsToCsv', () => {
     expect(cell('Notes')).toBe('Call =agent');
     expect(row(listing())['Stage']).toBe('New');
   });
+
+  it("includes the certificate's rating now and potential", () => {
+    const cells = row(listing({ epcEnergy: { certificateNumber: 'c', currentBand: 'E', potentialBand: 'C', currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] } }));
+    expect(cells['EPC Certificate Now']).toBe('E 50');
+    expect(cells['EPC Potential']).toBe('C 72');
+    expect(row(listing())['EPC Potential']).toBe('');
+  });
 });

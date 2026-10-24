@@ -21,7 +21,8 @@ import {
 import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { buildReport, type Report } from '../../src/services/report';
-import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
+import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES, type Flip } from '../../src/services/sold-prices';
+import { bandForScore, energyGap, lowWithPotential, type Band } from '../../src/services/epc-energy';
 
 const $ = (id: string) => document.getElementById(id)!;
 const form = $('dealForm') as HTMLFormElement;
@@ -75,6 +76,7 @@ async function init() {
 
   setUpPipeline();
   $('reportBtn').addEventListener('click', saveReport);
+  $('energyLoad').addEventListener('click', loadEnergy);
   $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
   $('soldRefresh').addEventListener('click', () => loadSold(true));
@@ -148,6 +150,7 @@ function showHeader() {
   $('calculator').hidden = missing;
   $('sold').hidden = missing;
   $('pipeline').hidden = missing;
+  $('energy').hidden = missing;
   $('reportControls').hidden = missing;
   if (!listing) {
     $('address').textContent = 'Listing not found';
@@ -177,6 +180,7 @@ function showHeader() {
   ].filter(Boolean).join(' · ');
 
   showPriceHistory(listing);
+  showEnergy(listing);
 
   const href = safeLink(listing.url);
   const open = $('openListing') as HTMLAnchorElement;
@@ -264,6 +268,73 @@ async function saveThePipeline() {
     $('pipelineSaved').textContent = `Could not save: ${error.message}`;
   } finally {
     for (const field of fields) saving.delete(field);
+  }
+}
+
+/** The EPC rating now and potential, with the recommended improvements */
+function showEnergy(l: PropertyListing) {
+  const energy = l.epcEnergy?.certificateNumber && (!l.epcCertificateNumber || l.epcEnergy.certificateNumber === l.epcCertificateNumber)
+    ? l.epcEnergy
+    : null;
+  const status = $('energyStatus');
+  $('energyBody').hidden = !energy;
+  $('energyLoad').hidden = !!energy || !l.fullAddress;
+  status.hidden = !!energy;
+  if (!energy) {
+    status.textContent = l.fullAddress
+      ? 'Not read yet for this home. Click Get EPC details to read its certificate.'
+      : 'No full address yet, so PropSnap cannot tell which certificate is this home.';
+    return;
+  }
+
+  const setBand = (el: HTMLElement, band: Band | null, score: number | null) => {
+    el.className = `band band-${band ?? 'none'}`;
+    el.textContent = band ? `${band}${score != null ? ` ${score}` : ''}` : '?';
+  };
+  setBand($('energyNow'), energy.currentBand, energy.currentScore);
+  setBand($('energyPotential'), energy.potentialBand, energy.potentialScore);
+
+  const gap = energyGap(energy);
+  $('energyGap').textContent = !gap || (gap.bands <= 0 && !gap.points)
+    ? ''
+    : `Up ${gap.bands > 0 ? `${gap.bands} band${gap.bands === 1 ? '' : 's'}` : ''}${gap.bands > 0 && gap.points ? ', ' : ''}${gap.points ? `${gap.points} points` : ''}`;
+  $('energyTag').hidden = !lowWithPotential(energy);
+
+  const notes: string[] = [];
+  if (energy.registrationDate) notes.push(`Certificate from ${shortDate(energy.registrationDate)}; works since then are not in it.`);
+  if (l.addressConfidence === 'best_guess') notes.push('This is the certificate of the best-guess home. Check the address on the dashboard.');
+  if (l.epcRating && energy.currentBand && l.epcRating.toUpperCase() !== energy.currentBand) {
+    notes.push(`The listing says EPC ${l.epcRating.toUpperCase()}; this certificate says ${energy.currentBand}. The listing may use a newer certificate.`);
+  }
+  $('energyNote').textContent = notes.join(' ');
+
+  $('energyImprovementsBox').hidden = energy.improvements.length === 0;
+  $('energyImprovements').replaceChildren(...energy.improvements.map((imp) => {
+    const tr = document.createElement('tr');
+    const after = imp.ratingAfter != null ? `${imp.ratingAfter} (${bandForScore(imp.ratingAfter)})` : '—';
+    [imp.name, imp.cost ?? '—', imp.saving != null ? formatMoney(imp.saving) : '—', after].forEach((text, i) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (i >= 2) td.className = 'num';
+      tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+async function loadEnergy() {
+  if (!listing) return;
+  const button = $('energyLoad') as HTMLButtonElement;
+  button.disabled = true;
+  $('energyStatus').textContent = 'Reading the certificate from the EPC register…';
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'LOAD_EPC_ENERGY', source: listing.source, listingId: listing.listingId });
+    if (!response?.success) throw new Error(response?.error ?? 'no answer from PropSnap');
+    // The saved listing changes, and the storage listener redraws the page
+  } catch (error: any) {
+    $('energyStatus').textContent = `Could not read the certificate: ${error.message}`;
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -580,6 +651,33 @@ function renderSold() {
   if (view.comparables.length === 0) {
     $('soldRows').replaceChildren(emptyRow('No sales match these filters. Try more years or all types.'));
   }
+  showFlips(view.flips);
+}
+
+/** Homes nearby bought and sold again soon after for more */
+function showFlips(flips: Flip[]) {
+  $('flips').hidden = flips.length === 0;
+  if (flips.length === 0) return;
+  const rise = median(flips.map((f) => f.risePct))!;
+  const gain = median(flips.map((f) => f.rise))!;
+  $('flipsSummary').textContent = `${flips.length} home${flips.length === 1 ? ' was' : 's were'} resold within ${FLIP_MONTHS / 12} years for ${FLIP_MIN_RISE_PCT}% or more`
+    + ` (same filters as above). Median rise ${rise.toFixed(0)}%, about ${formatMoney(gain)}. A rise this fast usually means the home was done up.`;
+  $('flipRows').replaceChildren(...flips.slice(0, SOLD_ROWS).map((f) => {
+    const tr = document.createElement('tr');
+    [
+      `${saleAddress(f.sold)}${f.sold.postcode ? ` ${f.sold.postcode}` : ''}`,
+      `${formatMoney(f.bought.price)}, ${monthYear(f.bought.date)}`,
+      `${formatMoney(f.sold.price)}, ${monthYear(f.sold.date)}`,
+      `+${formatMoney(f.rise)} (${f.risePct.toFixed(0)}%)`,
+      `${f.months} month${f.months === 1 ? '' : 's'}`,
+    ].forEach((text, i) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (i >= 3) td.className = 'num nowrap';
+      tr.append(td);
+    });
+    return tr;
+  }));
 }
 
 function soldRow(s: SoldPrice, postcode: string | null): HTMLTableRowElement {

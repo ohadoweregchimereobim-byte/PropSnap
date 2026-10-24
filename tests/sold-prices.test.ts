@@ -7,7 +7,7 @@ import {
   streetQuery,
   type SoldPrice,
 } from '../src/services/land-registry';
-import { isSameHome, lrTypeFor, median, saleAddress, soldPriceArea, soldPriceView, typeChoices } from '../src/services/sold-prices';
+import { findFlips, isSameHome, lrTypeFor, median, saleAddress, soldPriceArea, soldPriceView, typeChoices } from '../src/services/sold-prices';
 
 const LR = 'http://landregistry.data.gov.uk/def/common/';
 const PPI = 'http://landregistry.data.gov.uk/def/ppi/';
@@ -255,5 +255,54 @@ describe('typeChoices', () => {
       { types: houses.types, sinceYears: null, today: new Date('2026-10-23T00:00:00Z') },
     );
     expect(view.comparables.map((s) => s.id)).toEqual(['t', 's']);
+  });
+});
+
+describe('findFlips', () => {
+  const at = (id: string, paon: string, price: number, date: string, extra: Partial<SoldPrice> = {}) => sale({ id, paon, price, date, ...extra });
+
+  it('finds a home bought and resold within two years for at least 10% more', () => {
+    const flips = findFlips([
+      at('a1', '12', 150_000, '2023-01-10'),
+      at('a2', '12', 210_000, '2024-06-20'),
+    ]);
+    expect(flips).toHaveLength(1);
+    expect(flips[0]).toMatchObject({ rise: 60_000, months: 17 });
+    expect(flips[0]!.risePct).toBeCloseTo(40, 5);
+    expect(flips[0]!.bought.id).toBe('a1');
+  });
+
+  it('ignores long holds, small rises, other homes and new builds', () => {
+    expect(findFlips([at('b1', '14', 150_000, '2019-01-10'), at('b2', '14', 210_000, '2023-06-20')])).toEqual([]);
+    expect(findFlips([at('c1', '16', 200_000, '2023-01-10'), at('c2', '16', 215_000, '2023-12-20')])).toEqual([]);
+    expect(findFlips([at('d1', '18', 150_000, '2023-01-10'), at('d2', '20', 210_000, '2023-06-20')])).toEqual([]);
+    expect(findFlips([at('e1', '22', 150_000, '2023-01-10', { newBuild: true }), at('e2', '22', 210_000, '2023-06-20')])).toEqual([]);
+  });
+
+  it('tells flats in one building apart', () => {
+    const flips = findFlips([
+      at('f1', 'KINGS COURT', 100_000, '2023-01-10', { saon: 'FLAT 1' }),
+      at('f2', 'KINGS COURT', 130_000, '2023-09-10', { saon: 'FLAT 2' }),
+    ]);
+    expect(flips).toEqual([]);
+  });
+
+  it('counts whole months, and a home flipped twice twice', () => {
+    // 31 Jan to 30 Jan two years on is 23 whole months; 25 months is too long
+    expect(findFlips([at('g1', '30', 100_000, '2023-01-31'), at('g2', '30', 120_000, '2025-01-30')])[0]!.months).toBe(23);
+    expect(findFlips([at('g3', '31', 100_000, '2023-01-10'), at('g4', '31', 120_000, '2025-02-11')])).toEqual([]);
+    const twice = findFlips([at('h1', '32', 100_000, '2021-01-01'), at('h2', '32', 130_000, '2022-01-01'), at('h3', '32', 170_000, '2023-01-01')]);
+    expect(twice.map((f) => f.sold.id)).toEqual(['h3', 'h2']);
+  });
+
+  it('applies the type and years filters to the resale, and leaves out this home', () => {
+    const sales = [
+      at('own1', '12', 150_000, '2023-01-10'), at('own2', '12', 200_000, '2024-01-10'),
+      at('t1', '40', 150_000, '2024-01-10'), at('t2', '40', 190_000, '2025-01-10'),
+      at('s1', '42', 300_000, '2024-01-10', { propertyType: 'semi-detached' }), at('s2', '42', 360_000, '2025-01-10', { propertyType: 'semi-detached' }),
+      at('o1', '44', 100_000, '2015-01-10'), at('o2', '44', 130_000, '2016-01-10'),
+    ];
+    const view = soldPriceView(sales, { fullAddress: '12 High Street, CARDIFF', price: 250_000, listingType: 'sale' }, { types: ['terraced'], sinceYears: 5, today: new Date('2026-10-23T00:00:00Z') });
+    expect(view.flips.map((f) => f.sold.id)).toEqual(['t2']);
   });
 });

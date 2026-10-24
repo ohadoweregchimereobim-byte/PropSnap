@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { enrichWithEpc } from '../src/services/epc-api';
+import { enrichWithEpc, fetchCertificateEnergy, findCertificateNumber } from '../src/services/epc-api';
 
 // A made-up block of flats where every flat looks the same in the search
 // results. Only the full certificate tells them apart.
@@ -92,3 +92,29 @@ describe('certificate lookups for close calls', () => {
     expect(result.listing.addressCandidates?.[0]?.fullAddress).toContain('Flat 1,');
   });
 });
+
+describe('the matched certificate and its energy figures', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the certificate number of the matched home', async () => {
+    stubBlock(4);
+    const result = await enrichWithEpc('token', listing());
+    expect(result.listing.epcCertificateNumber).toBe('cert-1');
+  });
+
+  it('reads the rating now and potential from the certificate', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: {
+      current_energy_efficiency_band: 'E', potential_energy_efficiency_band: 'C', energy_rating_current: 50, energy_rating_potential: 72,
+    } }))));
+    expect(await fetchCertificateEnergy('token', 'cert-energy-1')).toMatchObject({ certificateNumber: 'cert-energy-1', currentBand: 'E', potentialBand: 'C' });
+  });
+
+  it('finds the certificate of an older listing by searching its postcode for the same address', async () => {
+    stubBlock(3);
+    const older = listing({ fullAddress: 'Flat 2, Ferry Court, CARDIFF', epcCertificateNumber: undefined });
+    expect(await findCertificateNumber('token', older)).toBe('cert-2');
+    expect(await findCertificateNumber('token', listing({ fullAddress: 'Flat 9, Nowhere, CARDIFF' }))).toBeNull();
+    expect(await findCertificateNumber('token', listing({ epcCertificateNumber: 'cert-7' }))).toBe('cert-7');
+  });
+});
+

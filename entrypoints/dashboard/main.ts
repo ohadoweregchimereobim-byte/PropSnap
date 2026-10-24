@@ -8,6 +8,7 @@
 import type { PropertyListing } from '../../src/adapters/types';
 import { chooseAddress, clearListings, deleteListing, getListings, LISTINGS_KEY, listingsToCsv } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
+import { describeEnergy } from '../../src/services/epc-energy';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import { describeChange, priceChange } from '../../src/services/price-history';
@@ -173,7 +174,7 @@ function renderRow(l: PropertyListing): HTMLTableRowElement {
     priceCell(l),
     cell(l.bedrooms?.toString() ?? '—', 'num'),
     cell(l.propertyType || '—'),
-    cell(l.epcRating || '—'),
+    epcCell(l),
     cell(l.agentName || '—'),
     stageCell(l),
     actionsCell(l),
@@ -207,6 +208,20 @@ function pickCell(l: PropertyListing): HTMLTableCellElement {
     updatePlanButton();
   });
   td.append(box);
+  return td;
+}
+
+/** The listing's EPC band, with the certificate's potential under it when known */
+function epcCell(l: PropertyListing): HTMLTableCellElement {
+  const e = l.epcEnergy;
+  const td = cell(l.epcRating || e?.currentBand || '—');
+  if (e?.potentialBand && e.currentBand && e.potentialBand !== e.currentBand) {
+    const up = document.createElement('div');
+    up.className = 'epc-up';
+    up.textContent = `could be ${e.potentialBand}`;
+    up.title = `Certificate: ${describeEnergy(e)}, now to potential`;
+    td.append(up);
+  }
   return td;
 }
 

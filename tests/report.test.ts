@@ -117,4 +117,28 @@ describe('buildReport', () => {
   it('says it is not advice', () => {
     expect(buildReport(input()).footer).toContain('Not financial or tax advice');
   });
+
+  it('shows the EPC potential and the recommended improvements', () => {
+    const energy = {
+      certificateNumber: 'c1', currentBand: 'E' as const, potentialBand: 'C' as const, currentScore: 50, potentialScore: 72, registrationDate: '2021-08-11',
+      improvements: [{ name: 'Loft insulation', cost: '£100 - £350', saving: 25, ratingAfter: 54 }],
+    };
+    const r = buildReport(input({ listing: { ...listing, epcEnergy: energy } }));
+    expect(row(r, 'Property', 'EPC certificate')).toBe('E (50) → C (72), now to potential (certificate 11 Aug 2021), for the best-guess home');
+    expect(section(r, 'Energy improvements')!.table!.rows).toEqual([['Loft insulation', '£100 - £350', '£25', '54 (E)']]);
+    expect(section(r, 'Energy improvements')!.notes![0]).toContain('Low rating with high potential');
+    expect(section(buildReport(input()), 'Energy improvements')).toBeUndefined();
+  });
+
+  it('lists homes flipped nearby with the filters used', () => {
+    const sales = [
+      sale('f1', '40', 150_000, { date: '2024-01-10' }), sale('f2', '40', 195_000, { date: '2025-02-10' }),
+      sale('own', '6', 175_000, { date: '2010-09-01' }),
+    ];
+    const view = soldPriceView(sales, listing, { types: ['terraced'], sinceYears: 5, today: new Date('2026-10-23T00:00:00Z') });
+    const r = buildReport(input({ sold: { view, where: 'Sales in CF23 6EZ.', filters: 'Terraced only, last 5 years' } }));
+    expect(section(r, 'Flipped nearby')!.table!.rows).toEqual([['40 Woolaston Avenue, Cardiff CF23 6EZ', '£150,000, Jan 2024', '£195,000, Feb 2025', '+£45,000 (30%)']]);
+    expect(section(r, 'Flipped nearby')!.notes![0]).toContain('Median rise 30%');
+    expect(section(buildReport(input()), 'Flipped nearby')).toBeUndefined();
+  });
 });
