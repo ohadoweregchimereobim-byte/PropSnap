@@ -64,11 +64,11 @@ export class ZooplaAdapter implements SiteAdapter {
       fullAddress: null,
 
       price,
-      priceQualifier: analytics.price_qualifier ?? null,
+      priceQualifier: zooplaLabel(analytics.price_qualifier),
       currency: 'GBP',
       listingType: isRent ? 'rent' : 'sale',
       bedrooms: analytics.num_beds != null ? Number(analytics.num_beds) : null,
-      propertyType: analytics.property_type ?? null,
+      propertyType: zooplaLabel(analytics.property_type),
       floorAreaSqm: floorAreaFromJsonLd(jsonLd) ?? floorAreaFromPageData(analytics.floor_area, analytics.size_sq_feet),
       floorAreaFromText: findFloorAreaInText([jsonLd?.description, this.metaDescription()]),
       numberFromText: findUnitNumberInText([jsonLd?.name, jsonLd?.description, this.metaDescription()], displayAddress),
@@ -80,8 +80,8 @@ export class ZooplaAdapter implements SiteAdapter {
       latitude,
       longitude,
 
-      tenure: analytics.tenure ?? null,
-      furnished: analytics.furnishing ?? null,
+      tenure: zooplaLabel(analytics.tenure),
+      furnished: zooplaLabel(analytics.furnishing),
       deposit: null,
       epcRating: epcBand(analytics.epc_rating),
 
@@ -262,4 +262,18 @@ export function floorAreaFromPageData(floorAreaJson?: string | null, sizeSqFeet?
 
   const feet = parseFloat(String(sizeSqFeet ?? '').replace(/,/g, ''));
   return Number.isFinite(feet) && feet > 0 ? Math.round(feet * 0.092903) : null;
+}
+
+/**
+ * Zoopla's page data uses codes: "offers_over", "share_of_freehold",
+ * "semi_detached_house", "flat". Shown as words: "Offers over",
+ * "Share of freehold", "Semi-detached house", "Flat". Text that is already
+ * words keeps its spelling, with a capital first letter.
+ */
+export function zooplaLabel(code: string | null | undefined): string | null {
+  const text = (code ?? '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  if (/^poa$/i.test(text)) return 'POA';
+  const words = text.replace(/\bsemi detached\b/i, 'semi-detached');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

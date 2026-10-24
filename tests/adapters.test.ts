@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseHTML } from 'linkedom';
 import { getAdapterForUrl } from '../src/adapters';
+import { zooplaLabel } from '../src/adapters/zoopla';
 
 /**
  * Each site adapter run against a small page built the way that site builds
@@ -143,7 +144,9 @@ describe('Zoopla', () => {
       price: 185_000,
       listingType: 'sale',
       bedrooms: 2,
-      propertyType: 'flat',
+      propertyType: 'Flat',
+      priceQualifier: 'Guide price',
+      tenure: 'Leasehold',
       floorAreaSqm: 63,
       epcRating: 'C',
       agentName: 'Moginie James',
@@ -158,6 +161,20 @@ describe('Zoopla', () => {
   it('knows a rental from the address', async () => {
     const listing = await capture('https://www.zoopla.co.uk/to-rent/details/67012345/', page);
     expect(listing.listingType).toBe('rent');
+  });
+});
+
+describe('Zoopla codes', () => {
+  it('shows the codes from a saved Zoopla page as words', () => {
+    expect(zooplaLabel('offers_over')).toBe('Offers over');
+    expect(zooplaLabel('share_of_freehold')).toBe('Share of freehold');
+    expect(zooplaLabel('flat')).toBe('Flat');
+    expect(zooplaLabel('semi_detached_house')).toBe('Semi-detached house');
+    expect(zooplaLabel('end_terrace_house')).toBe('End terrace house');
+    expect(zooplaLabel('poa')).toBe('POA');
+    expect(zooplaLabel('Guide price')).toBe('Guide price');
+    expect(zooplaLabel('')).toBeNull();
+    expect(zooplaLabel(undefined)).toBeNull();
   });
 });
 

@@ -150,3 +150,13 @@ describe("the site's own dates", () => {
     expect(describePortalChanges(plain)).toBeNull();
   });
 });
+
+describe('Zoopla wording saved as a code', () => {
+  it('does not add a history point when only the code becomes words', () => {
+    const before = withPriceHistory(undefined, capture(325_000, '2026-10-01T09:00:00Z', { priceQualifier: 'offers_over' }));
+    const after = withPriceHistory(before, capture(325_000, '2026-10-24T09:00:00Z', { priceQualifier: 'Offers over' }));
+    expect(after.priceHistory).toHaveLength(1);
+    // A real change of wording still counts
+    expect(withPriceHistory(after, capture(325_000, '2026-10-25T09:00:00Z', { priceQualifier: 'Guide price' })).priceHistory).toHaveLength(2);
+  });
+});

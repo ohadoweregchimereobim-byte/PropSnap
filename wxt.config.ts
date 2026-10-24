@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'PropSnap',
     description: 'Capture full property details from UK listing sites',
-    version: '0.6.0',
+    version: '0.6.1',
     permissions: ['storage', 'activeTab'],
     host_permissions: [
       'https://www.rightmove.co.uk/*',
