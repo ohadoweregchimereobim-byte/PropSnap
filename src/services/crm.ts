@@ -10,8 +10,11 @@ import { STATUSES, statusLabel, type PipelineStatus } from './pipeline';
 
 // ── Labels ──────────────────────────────────────────────────────────────
 
+/** Also leaves a home out of every letter (letters.ts) */
+export const DO_NOT_CONTACT_LABEL = 'Do not contact';
+
 /** Offered on every listing; the user can add their own */
-export const BUILT_IN_LABELS = ['Potential flip', 'BRR', 'Buy-to-let', 'HMO', 'Needs work', 'Motivated seller'];
+export const BUILT_IN_LABELS = ['Potential flip', 'BRR', 'Buy-to-let', 'HMO', 'Needs work', 'Motivated seller', DO_NOT_CONTACT_LABEL];
 
 export const LABEL_MAX = 30;
 const LABELS_PER_LISTING = 20;
@@ -78,7 +81,8 @@ export interface Activity {
   id: string;
   /** ISO 8601 */
   at: string;
-  kind: 'note' | 'call' | 'stage';
+  /** A letter: `text` is the letter's name */
+  kind: 'note' | 'call' | 'stage' | 'letter';
   text: string;
   /** Calls only */
   outcome?: CallOutcome;
@@ -108,7 +112,7 @@ export function cleanActivity(saved: unknown): Activity[] {
     if (!raw || typeof raw !== 'object') continue;
     const a = raw as Record<string, unknown>;
     if (typeof a.id !== 'string' || typeof a.at !== 'string' || Number.isNaN(Date.parse(a.at))) continue;
-    if (a.kind !== 'note' && a.kind !== 'call' && a.kind !== 'stage') continue;
+    if (a.kind !== 'note' && a.kind !== 'call' && a.kind !== 'stage' && a.kind !== 'letter') continue;
     const text = typeof a.text === 'string' ? a.text.slice(0, ACTIVITY_TEXT_MAX) : '';
     const entry: Activity = { id: a.id, at: a.at, kind: a.kind, text };
     if (a.kind === 'call') {
@@ -152,7 +156,7 @@ export function timeline(
     id: a.id,
     title: a.kind === 'call'
       ? `Call: ${outcomeLabel(a.outcome)}${a.stage ? ` (stage moved to ${statusLabel(a.stage)})` : ''}`
-      : a.kind === 'stage' ? `Stage: ${statusLabel(a.stage)}` : 'Note',
+      : a.kind === 'stage' ? `Stage: ${statusLabel(a.stage)}` : a.kind === 'letter' ? 'Letter sent' : 'Note',
     text: a.text,
   }));
 

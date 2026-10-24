@@ -65,6 +65,7 @@ const view: ViewOptions = { ...DEFAULT_VIEW };
 // Homes ticked for the viewing planner; kept while the table redraws
 const picked = new Set<string>();
 const planBtn = document.getElementById('planBtn') as HTMLButtonElement;
+const lettersBtn = document.getElementById('lettersBtn') as HTMLButtonElement;
 // Pickers the user opened stay open when the table redraws after a choice
 const openPickers = new Set<string>();
 let listings: PropertyListing[] = [];
@@ -109,6 +110,10 @@ async function init() {
     // Ticked homes start a new plan; with none ticked, open the saved plan
     const keys = listings.map(listingKey).filter((k) => picked.has(k));
     location.href = keys.length ? `./planner.html?${new URLSearchParams({ keys: keys.join(',') })}` : './planner.html';
+  });
+  lettersBtn.addEventListener('click', () => {
+    const keys = listings.map(listingKey).filter((k) => picked.has(k));
+    if (keys.length) location.href = `./letters.html?${new URLSearchParams({ keys: keys.join(',') })}`;
   });
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
 
@@ -216,6 +221,8 @@ function cell(text: string, className = ''): HTMLTableCellElement {
 function updatePlanButton() {
   planBtn.textContent = picked.size ? `Plan viewings (${picked.size})` : 'Viewing planner';
   planBtn.title = picked.size ? 'Plan a viewing day with the ticked homes' : 'Tick homes to plan a viewing day, or open the saved plan';
+  lettersBtn.textContent = picked.size ? `Letters (${picked.size})` : 'Letters';
+  lettersBtn.disabled = picked.size === 0;
 }
 
 function pickCell(l: PropertyListing): HTMLTableCellElement {

@@ -218,6 +218,8 @@ function showHeader() {
   $('sold').hidden = missing;
   $('pipeline').hidden = missing;
   $('agent').hidden = missing || !agentKey(listing ?? { agentName: null, agentBranch: null });
+  $('writeLetter').hidden = missing;
+  ($('writeLetter') as HTMLAnchorElement).href = `./letters.html?${new URLSearchParams({ keys: key })}`;
   $('energy').hidden = missing;
   $('reportControls').hidden = missing;
   if (!listing) {

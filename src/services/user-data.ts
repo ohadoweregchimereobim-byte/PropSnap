@@ -149,6 +149,19 @@ export function logCall(key: string, text: string, outcome: CallOutcome, now = n
   });
 }
 
+/** Log one letter on each home, under one lock */
+export function logLetters(keys: string[], letterName: string, now = new Date()): Promise<void> {
+  return withLock(USER_DATA_KEY, async () => {
+    const all = await getAllUserData();
+    for (const key of keys) {
+      const entry = { ...all[key] };
+      entry.activity = cleanActivity([...(entry.activity ?? []), newActivity('letter', letterName, now)]);
+      all[key] = entry;
+    }
+    await chrome.storage.local.set({ [USER_DATA_KEY]: all });
+  });
+}
+
 export function removeActivity(key: string, id: string): Promise<void> {
   return updateEntry(key, (entry) => ({ ...entry, activity: cleanActivity(entry.activity).filter((a) => a.id !== id) }));
 }
