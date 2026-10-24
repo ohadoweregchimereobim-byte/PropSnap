@@ -11,7 +11,7 @@ import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
-import { getAllUserData, savePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import { getAllUserData, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import {
   applyView,
   DEFAULT_VIEW,
@@ -339,11 +339,8 @@ function stageCell(l: PropertyListing): HTMLTableCellElement {
   select.value = pipeline?.status ?? 'new';
   select.addEventListener('change', async () => {
     try {
-      await savePipeline(rowKey(l), {
-        status: select.value as PipelineStatus,
-        notes: pipeline?.notes ?? '',
-        followUp: pipeline?.followUp ?? null,
-      });
+      // Only the stage: notes typed on the listing page meanwhile are kept
+      await updatePipeline(rowKey(l), { status: select.value as PipelineStatus });
     } catch (error: any) {
       setStatus(`Could not save the stage: ${error.message}`);
     }
