@@ -17,9 +17,25 @@
         <button id="planBtn" class="btn btn-primary">Viewing planner</button>
         <button id="lettersBtn" class="btn" disabled title="Tick homes to write to their owners">Letters</button>
         <button id="exportBtn" class="btn">Export CSV</button>
+        <button id="backupBtn" class="btn" title="Save everything to one file you can restore later, here or on another computer">Back up</button>
+        <button id="restoreBtn" class="btn" title="Load a PropSnap backup file">Restore</button>
+        <input id="restoreFile" type="file" accept="application/json,.json" hidden />
         <button id="clearBtn" class="btn btn-danger">Clear all</button>
       </div>
     </header>
+
+    <p id="backupNote" class="backup-note" hidden></p>
+
+    <section id="restorePanel" class="restore-panel" hidden aria-labelledby="restoreTitle">
+      <h2 id="restoreTitle">Restore a backup</h2>
+      <p id="restoreSummary"></p>
+      <div class="restore-actions">
+        <button id="restoreAdd" class="btn btn-primary" type="button"></button>
+        <button id="restoreReplace" class="btn btn-danger" type="button">Replace everything with the backup</button>
+        <button id="restoreCancel" class="btn" type="button">Cancel</button>
+      </div>
+      <p class="hint">Add keeps everything you have and brings in only the homes you don't have yet, with their notes. Replace swaps all your homes, notes, labels, plan, branding and letters for the backup's; PropSnap saves a backup of what you have first. Your EPC key stays as it is: backups never hold it.</p>
+    </section>
 
     <section class="summary" aria-label="Summary">
       <div class="stat"><span id="statTotal" class="stat-value">0</span><span class="stat-label">Saved</span></div>
