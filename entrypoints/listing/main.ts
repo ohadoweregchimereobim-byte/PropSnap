@@ -45,13 +45,20 @@ import { safeLink } from '../../src/services/dashboard-view';
 import {
   brr,
   buyToLet,
+  cleanCustomCosts,
+  CUSTOM_COST_NAME_MAX,
+  CUSTOM_COSTS_MAX,
   dealInputsFor,
+  flip,
+  hmo,
   RATES_YEAR,
+  type CustomCost,
   type DealInputs,
 } from '../../src/services/calculators';
+import { BRANDING_KEY, cleanBranding, getBranding, logoProblem, saveBranding, type Branding } from '../../src/services/branding';
 import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
 import { describeChange, priceChange } from '../../src/services/price-history';
-import { buildReport, type Report } from '../../src/services/report';
+import { buildReport, defaultStrategies, type Report, type Strategies } from '../../src/services/report';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES, type Flip } from '../../src/services/sold-prices';
 import { bandForScore, energyGap, lowWithPotential, type Band } from '../../src/services/epc-energy';
 
@@ -77,6 +84,10 @@ const unsaved = new Set<PipelineField>();
 const saving = new Set<PipelineField>();
 // False when the postcode is on the England and Wales border and the user has not picked a country
 let regionSure = true;
+/** Report strategies the user ticked or unticked; the others follow the figures */
+const touchedStrategies = new Set<keyof Strategies>();
+let branding: Branding = cleanBranding(null);
+let brandTimer: ReturnType<typeof setTimeout> | undefined;
 // Sold prices for this listing; null until loaded
 let sales: SoldPrice[] | null = null;
 let soldRequest = 0;
@@ -112,6 +123,8 @@ async function init() {
 
   setUpPipeline();
   setUpCrm();
+  setUpCosts();
+  setUpReportOptions();
   $('reportBtn').addEventListener('click', saveReport);
   $('energyLoad').addEventListener('click', loadEnergy);
   $('typeFilter').addEventListener('change', renderSold);
@@ -130,6 +143,10 @@ async function init() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (LISTINGS_KEY in changes) loadListing(false);
+    if (BRANDING_KEY in changes) {
+      branding = cleanBranding(changes[BRANDING_KEY]!.newValue);
+      fillBranding();
+    }
     if (AGENTS_KEY in changes) {
       getAgentNotes().then((notes) => { agentNotes = notes; fillAgentNote(); showCrm(); });
     }
@@ -151,6 +168,7 @@ async function init() {
     if (unsaved.size) { clearTimeout(pipelineTimer); saveThePipeline(); }
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; save(); }
     if (agentTimer) { clearTimeout(agentTimer); saveTheAgentNote(); }
+    if (brandTimer) { clearTimeout(brandTimer); saveTheBranding(); }
   });
 
   await loadListing(true);
@@ -579,7 +597,158 @@ function fillForm(inputs: DealInputs) {
   for (const el of fields) {
     el.value = String(inputs[el.dataset.field as keyof DealInputs]);
   }
+  fillCustomCosts(inputs.customCosts);
   calculate();
+}
+
+// ── Custom costs ──────────────────────────────────────────────────────────
+
+function costRow(cost: CustomCost | null): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'cost-row';
+  const name = document.createElement('input');
+  name.className = 'cost-name';
+  name.maxLength = CUSTOM_COST_NAME_MAX;
+  name.placeholder = 'For example: gas safety check';
+  name.setAttribute('aria-label', 'Cost');
+  name.value = cost?.name ?? '';
+  const amount = document.createElement('input');
+  amount.className = 'cost-amount';
+  amount.type = 'number';
+  amount.min = '0';
+  amount.step = '10';
+  amount.setAttribute('aria-label', 'Amount (£)');
+  amount.value = cost ? String(cost.amount) : '';
+  const when = document.createElement('select');
+  when.className = 'cost-when';
+  when.setAttribute('aria-label', 'When');
+  when.append(new Option('£ once', 'once'), new Option('£ a month', 'monthly'));
+  when.value = cost?.when ?? 'once';
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'cost-remove';
+  remove.textContent = '✕';
+  remove.title = 'Remove this cost';
+  remove.addEventListener('click', () => {
+    row.remove();
+    $('addCost').hidden = false;
+    form.dispatchEvent(new Event('input'));
+  });
+  row.append(name, amount, when, remove);
+  return row;
+}
+
+function fillCustomCosts(costs: CustomCost[]) {
+  $('customCosts').replaceChildren(...costs.map(costRow));
+  $('addCost').hidden = costs.length >= CUSTOM_COSTS_MAX;
+}
+
+/** The rows that have a name and an amount; a row still being typed is left out */
+function readCustomCosts(): CustomCost[] {
+  return cleanCustomCosts(Array.from($('customCosts').querySelectorAll<HTMLElement>('.cost-row')).map((row) => ({
+    name: row.querySelector<HTMLInputElement>('.cost-name')!.value,
+    amount: row.querySelector<HTMLInputElement>('.cost-amount')!.valueAsNumber,
+    when: row.querySelector<HTMLSelectElement>('.cost-when')!.value,
+  })));
+}
+
+function setUpCosts() {
+  $('addCost').addEventListener('click', () => {
+    const rows = $('customCosts');
+    if (rows.children.length >= CUSTOM_COSTS_MAX) return;
+    const row = costRow(null);
+    rows.append(row);
+    $('addCost').hidden = rows.children.length >= CUSTOM_COSTS_MAX;
+    row.querySelector('input')!.focus();
+  });
+}
+
+// ── Report options and branding ───────────────────────────────────────────
+
+function strategyBoxes(): HTMLInputElement[] {
+  return Array.from(document.querySelectorAll<HTMLInputElement>('[data-strategy]'));
+}
+
+function readStrategies(): Strategies {
+  const show = { btl: false, brr: false, flip: false, hmo: false };
+  for (const box of strategyBoxes()) show[box.dataset.strategy as keyof Strategies] = box.checked;
+  return show;
+}
+
+/** Boxes the user has not touched follow the figures: BRR and flip once works are typed, HMO once rooms are */
+function updateStrategies(inputs: DealInputs) {
+  const auto = defaultStrategies(inputs);
+  for (const box of strategyBoxes()) {
+    const name = box.dataset.strategy as keyof Strategies;
+    if (!touchedStrategies.has(name)) box.checked = auto[name];
+  }
+}
+
+function setUpReportOptions() {
+  for (const box of strategyBoxes()) {
+    box.addEventListener('change', () => touchedStrategies.add(box.dataset.strategy as keyof Strategies));
+  }
+  getBranding().then((saved) => { branding = saved; fillBranding(); }).catch(() => {});
+
+  const typed = () => {
+    branding = {
+      ...branding,
+      company: ($('brandCompany') as HTMLInputElement).value,
+      contact: ($('brandContact') as HTMLTextAreaElement).value,
+      colour: ($('brandColour') as HTMLInputElement).value,
+    };
+    clearTimeout(brandTimer);
+    brandTimer = setTimeout(saveTheBranding, 500);
+  };
+  for (const id of ['brandCompany', 'brandContact', 'brandColour']) $(id).addEventListener('input', typed);
+
+  $('brandLogo').addEventListener('change', () => {
+    const input = $('brandLogo') as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const problem = logoProblem(file);
+    if (problem) { $('brandSaved').textContent = problem; return; }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      branding = { ...branding, logo: String(reader.result) };
+      if (!cleanBranding(branding).logo) { $('brandSaved').textContent = 'Could not use this image'; return; }
+      fillBranding();
+      saveTheBranding();
+    });
+    reader.readAsDataURL(file);
+  });
+  $('brandLogoRemove').addEventListener('click', () => {
+    branding = { ...branding, logo: null };
+    fillBranding();
+    saveTheBranding();
+  });
+}
+
+/** Shows the saved branding; a field the user is typing in is left alone */
+function fillBranding() {
+  const set = (id: string, value: string) => {
+    const el = $(id) as HTMLInputElement | HTMLTextAreaElement;
+    if (document.activeElement !== el && el.value !== value) el.value = value;
+  };
+  set('brandCompany', branding.company);
+  set('brandContact', branding.contact);
+  set('brandColour', branding.colour);
+  const preview = $('brandLogoPreview') as HTMLImageElement;
+  preview.hidden = !branding.logo;
+  if (branding.logo) preview.src = branding.logo;
+  else preview.removeAttribute('src');
+  $('brandLogoRemove').hidden = !branding.logo;
+}
+
+async function saveTheBranding() {
+  brandTimer = undefined;
+  try {
+    await saveBranding(branding);
+    $('brandSaved').textContent = 'Saved for every report';
+  } catch (error: any) {
+    $('brandSaved').textContent = `Could not save: ${error.message}`;
+  }
 }
 
 function readForm(): DealInputs {
@@ -593,7 +762,7 @@ function readForm(): DealInputs {
       inputs[field] = el.value;
     }
   }
-  return inputs as unknown as DealInputs;
+  return { ...(inputs as unknown as DealInputs), customCosts: readCustomCosts() };
 }
 
 async function save() {
@@ -604,7 +773,7 @@ async function save() {
   // Keep only what the user changed
   const changed: Partial<DealInputs> = {};
   for (const field of Object.keys(current) as (keyof DealInputs)[]) {
-    if (current[field] !== fromListing.inputs[field]) (changed as Record<string, unknown>)[field] = current[field];
+    if (JSON.stringify(current[field]) !== JSON.stringify(fromListing.inputs[field])) (changed as Record<string, unknown>)[field] = current[field];
   }
   // On a border postcode, a country the user confirmed is kept even when it matches the guess
   if (!fromListing.regionSure && regionSure) changed.region = current.region;
@@ -623,6 +792,7 @@ function calculate() {
 
   // With no price the figures mean nothing, so ask for one instead
   const hasPrice = inputs.price > 0;
+  updateStrategies(inputs);
   $('needPrice').hidden = hasPrice;
   for (const card of document.querySelectorAll<HTMLElement>('.results .card')) card.hidden = !hasPrice;
   for (const hint of document.querySelectorAll<HTMLElement>('.need-rent')) hint.hidden = inputs.rentMonthly > 0;
@@ -657,20 +827,51 @@ function calculate() {
     ['Mortgage payment', `${formatMoney(btl.mortgageMonthly)} a month`],
     ['Running costs', `${formatMoney(btl.runningCostsMonthly)} a month`],
     ['Cashflow', `${formatMoney(btl.cashflowMonthly)} a month`, btl.cashflowMonthly < 0],
-    ['Cash you put in', formatMoney(btl.cashInvested), false, 'Deposit, tax, legal fees and survey'],
+    ['Cash you put in', formatMoney(btl.cashInvested), false, 'Deposit, tax, legal fees, survey, sourcing fee and your one-off costs'],
     ['Return on your cash', btl.returnOnCashPct == null ? '—' : pct(btl.returnOnCashPct), (btl.returnOnCashPct ?? 0) < 0],
   ]);
 
   // No value after the works typed yet: take the purchase price
   const deal = brr({ ...inputs, valueAfterRefurb: inputs.valueAfterRefurb || inputs.price });
   rows($('brrRows'), [
-    ['Cash you put in', formatMoney(deal.cashIn), false, 'Deposit, tax, legal fees, survey and the works'],
+    ['Cash you put in', formatMoney(deal.cashIn), false, 'Deposit, tax, legal fees, survey, sourcing fee, your one-off costs and the works'],
     ['New mortgage', formatMoney(deal.refinanceLoan)],
     ['Cash you take back out', formatMoney(deal.cashReleased), deal.cashReleased < 0, 'New mortgage minus the first mortgage'],
     ['Money left in the deal', deal.moneyLeftIn <= 0 ? `None (${formatMoney(-deal.moneyLeftIn)} more out than in)` : formatMoney(deal.moneyLeftIn)],
     ['Mortgage payment', `${formatMoney(deal.mortgageMonthly)} a month`],
     ['Cashflow', `${formatMoney(deal.cashflowMonthly)} a month`, deal.cashflowMonthly < 0],
     ['Return on money left in', deal.returnOnMoneyLeftPct == null ? 'No money left in' : pct(deal.returnOnMoneyLeftPct), (deal.returnOnMoneyLeftPct ?? 0) < 0],
+  ]);
+
+  const f = flip(inputs);
+  $('flipNeedValue').hidden = inputs.valueAfterRefurb > 0 && inputs.valueAfterRefurb !== inputs.price;
+  rows($('flipCalcRows'), [
+    ['Sale price', formatMoney(f.salePrice), false, 'The value after the works'],
+    ['Profit before tax', formatMoney(f.profit), f.profit < 0],
+    ['Profit on cost', f.profitOnCostPct == null ? '—' : pct(f.profitOnCostPct), f.profit < 0],
+    ['Cash needed', formatMoney(f.cashNeeded), false, 'Price less the bridging loan, tax, buying costs, the works, holding costs and the lender\'s fees'],
+    ['Return on cash', f.returnOnCashPct == null ? '—' : pct(f.returnOnCashPct), f.profit < 0],
+    ['Profit a month', f.profitMonthly == null ? '—' : formatMoney(f.profitMonthly), f.profit < 0],
+    ['Total cost', formatMoney(f.totalCost), false, 'Price, tax, buying costs, works, finance, holding and selling costs'],
+    ['Finance costs', formatMoney(f.financeCost), false, 'Bridging interest and fees'],
+    ['Holding costs', formatMoney(f.holdingCost)],
+    ['Selling costs', formatMoney(f.sellingCost), false, 'Agent and legal fees on the sale'],
+  ]);
+
+  const h = hmo(inputs);
+  const hasRooms = inputs.hmoRooms > 0 && inputs.hmoRoomRent > 0;
+  $('hmoNeedRooms').hidden = hasRooms;
+  $('hmoRows').hidden = !hasRooms;
+  rows($('hmoRows'), [
+    ['Rent', `${formatMoney(h.rentMonthly)} a month`],
+    ['Gross yield', pct(h.grossYieldPct)],
+    ['Net yield (before mortgage)', pct(h.netYieldPct)],
+    ['Running costs', `${formatMoney(h.runningCostsMonthly)} a month`, false, 'Management, repairs and empty rooms, bills, other costs and the licence'],
+    ['Mortgage payment', `${formatMoney(h.mortgageMonthly)} a month`],
+    ['Cashflow', `${formatMoney(h.cashflowMonthly)} a month`, h.cashflowMonthly < 0],
+    ['Cashflow a room', h.cashflowPerRoom == null ? '—' : `${formatMoney(h.cashflowPerRoom)} a month`, h.cashflowMonthly < 0],
+    ['Cash you put in', formatMoney(h.cashInvested), false, 'Deposit, tax, buying costs, sourcing fee, your one-off costs and the works'],
+    ['Return on your cash', h.returnOnCashPct == null ? '—' : pct(h.returnOnCashPct), (h.returnOnCashPct ?? 0) < 0],
   ]);
 }
 
@@ -744,7 +945,8 @@ function saveReport() {
   const report = buildReport({
     listing,
     sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: soldWhereText } : null,
-    deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs) },
+    deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs), flip: flip(inputs), hmo: hmo(inputs), show: readStrategies() },
+    branding,
     pipeline: cleanPipeline({ ...readPipeline(), updatedAt: '' }),
     labels: cleanLabels(allUserData[key]?.labels),
     activity: cleanActivity(allUserData[key]?.activity),
@@ -768,7 +970,28 @@ function renderReport(report: Report) {
     return node;
   };
 
-  const parts: HTMLElement[] = [el('h1', report.title), el('p', report.subtitle, 'report-subtitle')];
+  const parts: HTMLElement[] = [];
+  const page = $('report');
+  if (report.brand) {
+    const head = el('header', undefined, 'report-brand');
+    if (report.brand.logo) {
+      const img = document.createElement('img');
+      img.src = report.brand.logo;
+      img.alt = report.brand.company || 'Logo';
+      head.append(img);
+    }
+    const who = el('div');
+    if (report.brand.company) who.append(el('strong', report.brand.company));
+    if (report.brand.contact) who.append(el('p', report.brand.contact, 'report-contact'));
+    head.append(who);
+    parts.push(head);
+    page.style.setProperty('--brand', report.brand.colour);
+    page.style.setProperty('--brand-heading', report.brand.headingColour);
+  } else {
+    page.style.removeProperty('--brand');
+    page.style.removeProperty('--brand-heading');
+  }
+  parts.push(el('h1', report.title), el('p', report.subtitle, 'report-subtitle'));
   for (const section of report.sections) {
     const box = el('section', undefined, 'report-section');
     box.append(el('h2', section.heading));
@@ -795,7 +1018,7 @@ function renderReport(report: Report) {
     parts.push(box);
   }
   parts.push(el('p', report.footer, 'report-footer'));
-  $('report').replaceChildren(...parts);
+  page.replaceChildren(...parts);
 }
 
 function showSoldStatus(message: string) {

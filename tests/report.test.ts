@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { brr, buyToLet, DEFAULT_DEAL_INPUTS, type DealInputs } from '../src/services/calculators';
+import { brr, buyToLet, DEFAULT_DEAL_INPUTS, flip, hmo, type DealInputs } from '../src/services/calculators';
 import { buildReport, type ReportInput } from '../src/services/report';
 import type { SoldPrice } from '../src/services/land-registry';
 import { soldPriceView } from '../src/services/sold-prices';
@@ -52,7 +52,7 @@ function input(extra: Partial<ReportInput> = {}, deal: Partial<DealInputs> = {})
       where: 'Sales in CF23 6EZ and on Woolaston Avenue (CF23).',
       filters: 'Terraced only, last 5 years',
     },
-    deal: { inputs, btl: buyToLet(inputs), brr: brr(inputs) },
+    deal: { inputs, btl: buyToLet(inputs), brr: brr(inputs), flip: flip(inputs), hmo: hmo(inputs) },
     pipeline: { status: 'viewing', notes: 'Vendor wants a quick sale.\nViewing Sat 10am.', followUp: '2026-10-28', updatedAt: '' },
     includeNotes: false,
     generatedAt: new Date('2026-10-23T12:00:00Z'),
@@ -133,6 +133,46 @@ describe('buildReport', () => {
     expect(row(r, 'Deal notes', 'Stage')).toBeUndefined();
     expect(section(r, 'Deal notes')!.table).toBeUndefined();
     expect(section(buildReport(input({ includeNotes: true, pipeline: null })), 'Deal notes')).toBeUndefined();
+  });
+
+  it('adds the sourcing fee and extra costs to the purchase', () => {
+    const r = buildReport(input({}, {
+      sourcingFee: 2, sourcingFeeType: 'pct',
+      customCosts: [{ name: 'Gas safety', amount: 90, when: 'once' }, { name: 'Insurance', amount: 30, when: 'monthly' }],
+    }));
+    expect(row(r, 'Purchase and buy-to-let', 'Sourcing fee')).toBe('£5,800 (2% of the price)');
+    expect(row(r, 'Purchase and buy-to-let', 'Other one-off costs')).toBe('Gas safety £90');
+    expect(row(r, 'Purchase and buy-to-let', 'Other monthly costs')).toBe('Insurance £30 (£30 a month)');
+    expect(row(buildReport(input()), 'Purchase and buy-to-let', 'Sourcing fee')).toBeUndefined();
+  });
+
+  it('adds flip and HMO sections once they have figures, and only the strategies picked', () => {
+    const plain = buildReport(input());
+    expect(section(plain, 'Flip (buy, do up and sell)')).toBeUndefined();
+    expect(section(plain, 'HMO (let by the room)')).toBeUndefined();
+
+    const r = buildReport(input({}, { refurbCost: 20_000, valueAfterRefurb: 340_000, hmoRooms: 5, hmoRoomRent: 550, hmoBillsMonthly: 500 }));
+    expect(row(r, 'Flip (buy, do up and sell)', 'Sale price')).toBe('£340,000');
+    expect(row(r, 'Flip (buy, do up and sell)', 'Bridging loan')).toBe('None, bought with cash');
+    expect(row(r, 'Flip (buy, do up and sell)', 'Profit before tax')).toMatch(/^-?£/);
+    expect(row(r, 'HMO (let by the room)', 'Rooms')).toBe('5 at £550 a month');
+    expect(row(r, 'HMO (let by the room)', 'Rent')).toBe('£2,750 a month');
+
+    const picked = input({}, { refurbCost: 20_000, valueAfterRefurb: 340_000 });
+    picked.deal.show = { btl: false, brr: false, flip: true, hmo: false };
+    const only = buildReport(picked);
+    expect(only.sections.map((x) => x.heading)).toContain('Purchase');
+    expect(section(only, 'Purchase and buy-to-let')).toBeUndefined();
+    expect(section(only, 'Buy, refurbish, refinance')).toBeUndefined();
+    expect(section(only, 'Flip (buy, do up and sell)')).toBeDefined();
+  });
+
+  it('carries the branding, with a readable heading colour', () => {
+    expect(buildReport(input()).brand).toBeNull();
+    const r = buildReport(input({ branding: { company: 'Acme Sourcing', contact: '029 2000 0000', colour: '#fde047', logo: null } }));
+    expect(r.brand).toMatchObject({ company: 'Acme Sourcing', contact: '029 2000 0000', colour: '#fde047', headingColour: '#0f172a' });
+    expect(r.footer).toMatch(/^Prepared by Acme Sourcing on 23 Oct 2026\./);
+    expect(r.footer).toContain('Not financial or tax advice');
   });
 
   it('says it is not advice', () => {
