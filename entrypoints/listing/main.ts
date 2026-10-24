@@ -17,7 +17,7 @@ import {
   RATES_YEAR,
   type DealInputs,
 } from '../../src/services/calculators';
-import { fetchSoldPrices, type SoldPrice } from '../../src/services/land-registry';
+import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { buildReport, type Report } from '../../src/services/report';
 import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
@@ -50,6 +50,8 @@ let regionSure = true;
 // Sold prices for this listing; null until loaded
 let sales: SoldPrice[] | null = null;
 let soldRequest = 0;
+// "Sales in CF24 2QH and on …", for the page and the report
+let soldWhereText = '';
 // Most rows the sold-price table shows
 const SOLD_ROWS = 50;
 
@@ -82,7 +84,7 @@ async function init() {
   $('reportBtn').addEventListener('click', saveReport);
   $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
-  $('soldRefresh').addEventListener('click', loadSold);
+  $('soldRefresh').addEventListener('click', () => loadSold(true));
   $('useMedian').addEventListener('click', () => {
     const value = Number(($('useMedian') as HTMLButtonElement).dataset.value);
     const input = form.querySelector<HTMLInputElement>('[data-field=valueAfterRefurb]');
@@ -419,7 +421,8 @@ function setTypeFilter() {
   }));
 }
 
-async function loadSold() {
+/** Sold prices kept from earlier today show at once; `fresh` asks Land Registry again */
+async function loadSold(fresh = false) {
   if (!listing) return;
   const request = ++soldRequest;
   const area = soldPriceArea(listing);
@@ -429,7 +432,8 @@ async function loadSold() {
     area.postcode ? `in ${area.postcode}` : null,
     area.street && area.outcode ? `on ${titleCase(area.street)} (${area.outcode})` : null,
   ].filter(Boolean);
-  $('soldWhere').textContent = where.length ? `Sales ${where.join(' and ')}.` : '';
+  soldWhereText = where.length ? `Sales ${where.join(' and ')}.` : '';
+  $('soldWhere').textContent = soldWhereText;
 
   if (where.length === 0) {
     showSoldStatus('PropSnap needs the full postcode or the street name to find sold prices, and this listing has neither.');
@@ -438,9 +442,14 @@ async function loadSold() {
 
   showSoldStatus('Asking HM Land Registry…');
   try {
-    const found = await fetchSoldPrices(area);
+    const found = await fetchSoldPricesCached(area, { fresh });
     if (request !== soldRequest) return;
-    sales = found;
+    sales = found.sales;
+    // Say when a kept answer is shown, so the user knows Refresh asks again
+    const minutes = Math.round((Date.now() - found.at) / 60_000);
+    if (minutes >= 1) {
+      $('soldWhere').textContent = `${soldWhereText} Fetched ${minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`} ago; Refresh asks again.`;
+    }
     renderSold();
   } catch (error: any) {
     if (request !== soldRequest) return;
@@ -470,7 +479,7 @@ function saveReport() {
   const brrInputs = { ...inputs, valueAfterRefurb: inputs.valueAfterRefurb || inputs.price };
   const report = buildReport({
     listing,
-    sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: $('soldWhere').textContent ?? '' } : null,
+    sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: soldWhereText } : null,
     deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs) },
     pipeline: cleanPipeline({ ...readPipeline(), updatedAt: '' }),
     includeNotes: ($('reportNotes') as HTMLInputElement).checked,

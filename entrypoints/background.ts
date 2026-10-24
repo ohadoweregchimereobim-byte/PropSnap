@@ -8,6 +8,7 @@
  */
 import { enrichWithEpc, type EnrichmentResult } from '../src/services/epc-api';
 import { saveListing, getSettings, getListings, listingsToCsv } from '../src/services/storage';
+import { reuseKnownAddress } from '../src/services/address-choice';
 import { getAllUserData } from '../src/services/user-data';
 import type { PropertyListing } from '../src/adapters/types';
 import { applyFloorAreaSetting } from '../src/adapters/floor-area-text';
@@ -35,13 +36,6 @@ export default defineBackground(() => {
       return true; // Async response
     }
 
-    if (message.type === 'GET_LISTINGS') {
-      getListings()
-        .then((listings) => sendResponse({ success: true, listings }))
-        .catch((error) => sendResponse({ success: false, error: error.message }));
-      return true;
-    }
-
     if (message.type === 'EXPORT_CSV') {
       Promise.all([getListings(), getAllUserData()])
         .then(([listings, userData]) => sendResponse({ success: true, csv: listingsToCsv(listings, userData) }))
@@ -64,6 +58,15 @@ async function handleCaptureAndEnrich(
 
   // Run EPC enrichment if enabled and we have a token
   if (settings.autoEnrich && settings.epcApiToken) {
+    // Captured again, and the home is already known: no need to ask the register
+    const previous = (await getListings()).find((l) => l.source === listing.source && l.listingId === listing.listingId);
+    const known = reuseKnownAddress(previous, listing);
+    if (known) {
+      console.log('PropSnap: Address already known from an earlier capture, EPC lookup skipped');
+      const saved = await saveListing(known);
+      return { listing: saved, enrichmentStatus: 'enriched', enrichmentDetail: saved.enrichmentDetail ?? undefined };
+    }
+
     console.log('PropSnap: Starting EPC enrichment...');
     const result = await enrichWithEpc(settings.epcApiToken, listing);
     console.log(`PropSnap: Enrichment status: ${result.enrichmentStatus}`, result.enrichmentDetail ?? '');

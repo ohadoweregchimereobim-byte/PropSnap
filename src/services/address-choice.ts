@@ -39,6 +39,30 @@ export function keepUserChoice(previous: PropertyListing | undefined, next: Prop
   };
 }
 
+/**
+ * A new capture of a listing whose home is already known (an exact match, or
+ * picked by the user) for the same postcode and listing address: the EPC
+ * register would only say the same again, so the saved address is used and
+ * the capture skips the lookup. Null when the lookup should run.
+ */
+export function reuseKnownAddress(previous: PropertyListing | undefined, next: PropertyListing): PropertyListing | null {
+  if (!previous?.fullAddress || next.fullAddress) return null;
+  if (previous.addressConfidence !== 'exact' && previous.addressConfidence !== 'user_choice') return null;
+  if (!previous.postcode || !next.postcode) return null;
+  if (normalisePostcode(previous.postcode) !== normalisePostcode(next.postcode)) return null;
+  if (previous.displayAddress.trim().toLowerCase() !== next.displayAddress.trim().toLowerCase()) return null;
+
+  return {
+    ...next,
+    fullAddress: previous.fullAddress,
+    addressConfidence: previous.addressConfidence,
+    addressCandidates: previous.addressCandidates ?? null,
+    enrichmentDetail: previous.enrichmentDetail ?? null,
+    // The listing's own rating wins; an exact match may have lent the certificate's
+    epcRating: next.epcRating || (previous.addressConfidence === 'exact' ? previous.epcRating : null),
+  };
+}
+
 /** A Google Maps search for the address, so the user can check it on Street View */
 export function mapsLink(fullAddress: string, postcode: string): string {
   const query = postcode && !fullAddress.includes(postcode) ? `${fullAddress}, ${postcode}` : fullAddress;

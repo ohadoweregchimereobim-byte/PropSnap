@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AddressCandidate, PropertyListing } from '../src/adapters/types';
-import { chooseCandidate, keepUserChoice, mapsLink } from '../src/services/address-choice';
+import { chooseCandidate, keepUserChoice, mapsLink, reuseKnownAddress } from '../src/services/address-choice';
 
 const candidate = (n: number): AddressCandidate => ({
   fullAddress: `${n} Lyric Way, Thornhill, CARDIFF`,
@@ -74,6 +74,48 @@ describe('keepUserChoice', () => {
     const next = listing();
     expect(keepUserChoice(listing(), next)).toBe(next);
     expect(keepUserChoice(undefined, next)).toBe(next);
+  });
+});
+
+describe('reuseKnownAddress', () => {
+  // What the site gives on a new capture: no full address yet
+  const fresh = (extra: Partial<PropertyListing> = {}) =>
+    listing({ fullAddress: null, addressConfidence: null, addressCandidates: null, enrichmentDetail: null, epcRating: null, ...extra });
+  const exact = listing({ fullAddress: '50 Lyric Way, Thornhill, CARDIFF', addressConfidence: 'exact', addressCandidates: null, enrichmentDetail: 'Exact: matched on house number', epcRating: 'B' });
+
+  it('uses an exact match again, with the rating it lent', () => {
+    const known = reuseKnownAddress(exact, fresh({ price: 250_000 }));
+    expect(known?.fullAddress).toBe('50 Lyric Way, Thornhill, CARDIFF');
+    expect(known?.addressConfidence).toBe('exact');
+    expect(known?.enrichmentDetail).toBe('Exact: matched on house number');
+    expect(known?.epcRating).toBe('B');
+    // The new capture's own figures come through
+    expect(known?.price).toBe(250_000);
+  });
+
+  it("keeps the listing's own rating over the certificate's", () => {
+    expect(reuseKnownAddress(exact, fresh({ epcRating: 'C' }))?.epcRating).toBe('C');
+  });
+
+  it("uses the user's pick again, with the homes to choose from", () => {
+    const picked = chooseCandidate(listing(), 'cert-52');
+    const known = reuseKnownAddress(picked, fresh());
+    expect(known?.fullAddress).toBe('52 Lyric Way, Thornhill, CARDIFF');
+    expect(known?.addressConfidence).toBe('user_choice');
+    expect(known?.addressCandidates).toHaveLength(3);
+    // A pick never lends a certificate's rating
+    expect(known?.epcRating).toBeNull();
+  });
+
+  it('asks the register again for a best guess, a new postcode or a new address', () => {
+    expect(reuseKnownAddress(listing(), fresh())).toBeNull();
+    expect(reuseKnownAddress(exact, fresh({ postcode: 'CF14 9BQ' }))).toBeNull();
+    expect(reuseKnownAddress(exact, fresh({ displayAddress: 'Lyric Way, Cardiff CF14' }))).toBeNull();
+    expect(reuseKnownAddress(undefined, fresh())).toBeNull();
+  });
+
+  it('matches the postcode however it is spaced', () => {
+    expect(reuseKnownAddress(exact, fresh({ postcode: 'cf149bp' }))).not.toBeNull();
   });
 });
 

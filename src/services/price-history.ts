@@ -82,9 +82,10 @@ export function latestMove(listing: Pick<PropertyListing, 'priceHistory'>): { fr
   return null;
 }
 
+const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+
 /** "Reduced £10,000 (−3.3%)", "Up £5,000 (+1.7%)", "Back to the first price" */
 export function describeChange(c: PriceChange): string {
-  const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
   const pct = `${c.changePct > 0 ? '+' : '−'}${Math.abs(c.changePct).toFixed(1)}%`;
   if (c.direction === 'reduced') return `Reduced ${money.format(-c.change)} (${pct})`;
   if (c.direction === 'increased') return `Up ${money.format(c.change)} (${pct})`;

@@ -10,6 +10,8 @@
  * "Contains HM Land Registry data © Crown copyright and database right".
  */
 
+import { readCache, writeCache } from './session-cache';
+
 export const LAND_REGISTRY_ENDPOINT = 'https://landregistry.data.gov.uk/landregistry/query';
 
 export type LrPropertyType = 'detached' | 'semi-detached' | 'terraced' | 'flat-maisonette' | 'other';
@@ -201,4 +203,28 @@ export async function fetchSoldPrices(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Land Registry adds sales once a month, so a day-old answer is as good as a new one */
+const SOLD_CACHE_MS = 24 * 60 * 60_000;
+
+type SoldArea = { postcode: string | null; street: string | null; outcode: string | null };
+
+/**
+ * fetchSoldPrices, with the answer kept for a day so opening the same listing
+ * again is instant. `fresh` asks Land Registry again (the Refresh button).
+ * `at` says when the sales were fetched.
+ */
+export async function fetchSoldPricesCached(
+  where: SoldArea,
+  { fresh = false }: { fresh?: boolean } = {},
+): Promise<{ sales: SoldPrice[]; at: number }> {
+  const key = `sold:${where.postcode ?? ''}|${where.street ?? ''}|${where.outcode ?? ''}`;
+  if (!fresh) {
+    const kept = await readCache<SoldPrice[]>(key);
+    if (kept) return { sales: kept.value, at: kept.at };
+  }
+  const sales = await fetchSoldPrices(where);
+  await writeCache(key, sales, SOLD_CACHE_MS);
+  return { sales, at: Date.now() };
 }

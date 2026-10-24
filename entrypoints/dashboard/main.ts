@@ -73,7 +73,12 @@ let userData: UserDataMap = {};
 init();
 
 async function init() {
-  searchInput.addEventListener('input', () => { view.search = searchInput.value; render(); });
+  // Redraw once typing pauses, not on every key
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { view.search = searchInput.value; render(); }, 150);
+  });
   sourceSelect.addEventListener('change', () => { view.source = sourceSelect.value as ViewOptions['source']; render(); });
   matchSelect.addEventListener('change', () => { view.match = matchSelect.value as ViewOptions['match']; render(); });
   priceSelect.addEventListener('change', () => { view.price = priceSelect.value as ViewOptions['price']; render(); });
@@ -103,8 +108,12 @@ async function init() {
   document.getElementById('clearBtn')!.addEventListener('click', handleClearAll);
 
   // A capture in another tab saves here too, so redraw when storage changes
+  // The change carries the new value, so there is nothing to read back
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && (STORAGE_KEY in changes || USER_DATA_KEY in changes)) reload();
+    if (area !== 'local' || !(STORAGE_KEY in changes || USER_DATA_KEY in changes)) return;
+    if (STORAGE_KEY in changes) listings = (changes[STORAGE_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
+    if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
+    render();
   });
 
   await reload();
@@ -435,8 +444,11 @@ function formatDate(iso: string): string {
   return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// One formatter for every price on the page; making one per cell is slow
+const MONEY = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+
 function formatMoney(value: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value);
+  return MONEY.format(value);
 }
 
 function formatPrice(l: PropertyListing): string {

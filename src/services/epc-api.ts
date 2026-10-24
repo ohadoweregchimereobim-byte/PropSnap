@@ -1,6 +1,7 @@
 import type { AddressCandidate, EpcResult, PropertyListing } from '../adapters/types';
 import { closeCalls, extractNumbers, findBestMatch, latestPerHome, normalisePostcode, scoreCandidates } from './epc-match';
 import type { EpcMatch } from './epc-match';
+import { readCache, writeCache } from './session-cache';
 
 /**
  * EPC Register API client
@@ -31,6 +32,9 @@ const LOOKUP_PAUSE_MS = 10 * 60_000;
 /** A request with no answer by then is given up, so the popup never waits forever */
 const SEARCH_TIMEOUT_MS = 15_000;
 const CERTIFICATE_TIMEOUT_MS = 10_000;
+
+/** A certificate never changes once lodged, so its details are kept a long time */
+const CERTIFICATE_CACHE_MS = 30 * 24 * 60 * 60_000;
 
 /** Most certificate lookups per capture, to stay clear of the rate limit */
 const MAX_DETAIL_LOOKUPS = 10;
@@ -233,7 +237,11 @@ export async function fetchCertificateDetails(
   token: string,
   certificateNumber: string
 ): Promise<ReturnType<typeof readDetails> | null> {
-  if (lookupsPaused() || !certificateNumber) return null;
+  if (!certificateNumber) return null;
+  const cacheKey = `cert:${certificateNumber}`;
+  const kept = await readCache<ReturnType<typeof readDetails>>(cacheKey);
+  if (kept) return kept.value;
+  if (lookupsPaused()) return null;
 
   try {
     const url = `${EPC_CERTIFICATE_URL}?${new URLSearchParams({ certificate_number: certificateNumber })}`;
@@ -252,7 +260,9 @@ export async function fetchCertificateDetails(
     }
     if (!response.ok) return null;
 
-    return readDetails(await response.json());
+    const details = readDetails(await response.json());
+    await writeCache(cacheKey, details, CERTIFICATE_CACHE_MS);
+    return details;
   } catch (error) {
     // A lookup that hangs would make every capture wait 10 s per pair, so pause them too
     if (isTimeout(error)) lookupsPausedUntil = Date.now() + LOOKUP_PAUSE_MS;

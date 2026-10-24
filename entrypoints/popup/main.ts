@@ -11,7 +11,7 @@
 
 import { downloadCsv } from '../../src/services/csv-download';
 import { latestMove } from '../../src/services/price-history';
-import { saveSettings } from '../../src/services/storage';
+import { getListings, saveSettings } from '../../src/services/storage';
 
 // DOM elements
 const statusEl = document.getElementById('status')!;
@@ -45,10 +45,6 @@ const fields = {
 init();
 
 async function init() {
-  await updateListingCount();
-  await loadSettings();
-  await checkCurrentTab();
-
   captureBtn.addEventListener('click', handleCapture);
   exportBtn.addEventListener('click', handleExport);
   dashboardBtn.addEventListener('click', () => {
@@ -56,6 +52,9 @@ async function init() {
   });
   settingsBtn.addEventListener('click', toggleSettings);
   saveSettingsBtn.addEventListener('click', handleSaveSettings);
+
+  // The Capture button first; the count and settings fill in alongside
+  await Promise.all([checkCurrentTab(), updateListingCount(), loadSettings()]);
 }
 
 /**
@@ -273,8 +272,8 @@ async function handleSaveSettings() {
  */
 async function updateListingCount() {
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'GET_LISTINGS' });
-    const count = response?.listings?.length ?? 0;
+    // Read straight from storage: no need to wake the background worker for a number
+    const count = (await getListings()).length;
     listingCountEl.textContent = `${count} listing${count === 1 ? '' : 's'} saved`;
   } catch {
     listingCountEl.textContent = '0 listings saved';

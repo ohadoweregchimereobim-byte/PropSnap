@@ -56,7 +56,14 @@ async function init() {
   minutesInput.value = String(plan.minutesEach);
 
   dateInput.addEventListener('change', () => { plan.date = dateInput.value || today; save(); render(); });
-  startInput.addEventListener('input', () => { plan.start = startInput.value; save(); renderLinks(); });
+  // Links follow every key; the save waits until typing pauses
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
+  startInput.addEventListener('input', () => {
+    plan.start = startInput.value;
+    renderLinks();
+    clearTimeout(startTimer);
+    startTimer = setTimeout(save, 400);
+  });
   minutesInput.addEventListener('change', () => {
     const m = Number(minutesInput.value);
     plan.minutesEach = Number.isFinite(m) && m >= 5 && m <= 240 ? Math.round(m) : 30;
