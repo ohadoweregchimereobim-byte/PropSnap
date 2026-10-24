@@ -6,6 +6,20 @@ export default defineConfig({
     name: 'PropSnap',
     description: 'Capture full property details from UK listing sites',
     version: '0.7.0',
+    icons: {
+      16: '/icons/icon-16.png',
+      32: '/icons/icon-32.png',
+      48: '/icons/icon-48.png',
+      128: '/icons/icon-128.png',
+    },
+    action: {
+      default_icon: {
+        16: '/icons/icon-16.png',
+        32: '/icons/icon-32.png',
+        48: '/icons/icon-48.png',
+        128: '/icons/icon-128.png',
+      },
+    },
     permissions: ['storage', 'activeTab'],
     host_permissions: [
       'https://www.rightmove.co.uk/*',
