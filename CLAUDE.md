@@ -21,7 +21,7 @@ Users browse Rightmove, Zoopla, or OpenRent listings. They click "Capture" in th
 
 ## Site adapters (`src/adapters/`)
 
-Each site exposes data differently. `tests/adapters.test.ts` runs each adapter's `extract()` on a small page built the way that site builds its listing pages (DOM from `linkedom`); when a site changes its page, put a saved copy of the real page in there. The popup decides "is this a listing page" with `getAdapterForUrl`, the same check the content script makes.
+Each site exposes data differently. `tests/adapters.test.ts` runs each adapter's `extract()` on a small page built the way that site builds its listing pages (DOM from `linkedom`); when a site changes its page, put a saved copy of the real page in there. Each site's listing URL patterns live in `src/adapters/listing-urls.ts`; the popup decides "is this a listing page" with `listingSiteForUrl` (the same patterns the content script uses), so it never loads the extraction code.
 
 ### Rightmove (`rightmove.ts`)
 - Data source: `window.__PAGE_MODEL` — packed JSON format (schema map at index 0, values by index)
