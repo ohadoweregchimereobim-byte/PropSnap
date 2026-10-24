@@ -11,6 +11,7 @@
 
 import { downloadCsv } from '../../src/services/csv-download';
 import { latestMove } from '../../src/services/price-history';
+import { saveSettings } from '../../src/services/storage';
 
 // DOM elements
 const statusEl = document.getElementById('status')!;
@@ -258,13 +259,11 @@ async function loadSettings() {
  * Save settings from the form.
  */
 async function handleSaveSettings() {
-  const settings = {
+  await saveSettings({
     epcApiToken: epcTokenInput.value.trim(),
     autoEnrich: autoEnrichCheckbox.checked,
     floorAreaFromText: floorAreaFromTextCheckbox.checked,
-  };
-
-  await chrome.storage.local.set({ propsnap_settings: settings });
+  });
   setStatus('Settings saved!', 'success');
   settingsPanel.hidden = true;
 }

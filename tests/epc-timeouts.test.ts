@@ -68,12 +68,41 @@ describe('EPC requests that take too long', () => {
     expect(result.enrichmentStatus).toBe('api_error');
     expect(result.enrichmentDetail).toContain('did not answer in 15 seconds');
   });
+
+  it('gives the same message when the answer stops halfway', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new DOMException('signal timed out', 'TimeoutError'); },
+    })));
+
+    const result = await enrichWithEpc('token', listing());
+    expect(result.enrichmentDetail).toContain('did not answer in 15 seconds');
+  });
+});
+
+describe('certificate lookups that hang', () => {
+  it('stop after the first pair instead of waiting on every one', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/search')) return new Response(JSON.stringify({ data: [1, 2, 3, 4, 5, 6].map(flat) }));
+      throw new DOMException('signal timed out', 'TimeoutError');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await enrichWithEpc('token', listing());
+    const lookups = fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/certificate'));
+    expect(lookups).toHaveLength(2);
+    expect(result.enrichmentStatus).toBe('enriched');
+    expect(result.listing.addressConfidence).toBe('best_guess');
+  });
 });
 
 describe('certificate lookups after a refusal', () => {
   it('pause for ten minutes, then start again', async () => {
+    // An hour on, so a pause left by the tests above is over
+    const start = Date.now() + 60 * 60_000;
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-24T09:00:00Z'));
+    vi.setSystemTime(start);
 
     let refuse = true;
     const fetchMock = vi.fn(async (url: string) => {
@@ -90,12 +119,12 @@ describe('certificate lookups after a refusal', () => {
 
     // Five minutes on: still paused
     refuse = false;
-    vi.setSystemTime(new Date('2026-10-24T09:05:00Z'));
+    vi.setSystemTime(start + 5 * 60_000);
     await enrichWithEpc('token', listing());
     expect(lookups()).toBe(afterRefusal);
 
     // Eleven minutes on: asking again, and the floor area picks flat 1
-    vi.setSystemTime(new Date('2026-10-24T09:11:00Z'));
+    vi.setSystemTime(start + 11 * 60_000);
     const result = await enrichWithEpc('token', listing());
     expect(lookups()).toBeGreaterThan(afterRefusal);
     expect(result.listing.fullAddress).toContain('Flat 1,');

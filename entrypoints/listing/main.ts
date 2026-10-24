@@ -43,6 +43,8 @@ let pipelineTimer: ReturnType<typeof setTimeout> | undefined;
 // kept, and shows here unless the user is changing that same field.
 type PipelineField = 'status' | 'followUp' | 'notes';
 const unsaved = new Set<PipelineField>();
+// Fields being saved right now; an older copy arriving meanwhile must not replace them
+const saving = new Set<PipelineField>();
 // False when the postcode is on the England and Wales border and the user has not picked a country
 let regionSure = true;
 // Sold prices for this listing; null until loaded
@@ -95,9 +97,20 @@ async function init() {
     if (area !== 'local') return;
     if (LISTINGS_KEY in changes) loadListing(false);
     if (USER_DATA_KEY in changes) {
-      const all = (changes[USER_DATA_KEY]!.newValue ?? {}) as UserDataMap;
-      refreshPipeline(cleanPipeline(all[key]?.pipeline));
+      const pipelineIn = (value: unknown) => JSON.stringify((value as UserDataMap | undefined)?.[key]?.pipeline ?? null);
+      const { oldValue, newValue } = changes[USER_DATA_KEY]!;
+      // Calculator saves change user data too; only a new pipeline is shown
+      if (pipelineIn(oldValue) !== pipelineIn(newValue)) {
+        refreshPipeline(cleanPipeline((newValue as UserDataMap | undefined)?.[key]?.pipeline));
+      }
     }
+  });
+
+  // Save what is still waiting when the tab is closed or hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    if (unsaved.size) { clearTimeout(pipelineTimer); saveThePipeline(); }
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = undefined; save(); }
   });
 
   await loadListing(true);
@@ -202,19 +215,24 @@ function fillPipeline(p: ReturnType<typeof cleanPipeline>) {
   ($('pipelineStatus') as HTMLSelectElement).value = p?.status ?? 'new';
   ($('pipelineFollowUp') as HTMLInputElement).value = p?.followUp ?? '';
   ($('pipelineNotes') as HTMLTextAreaElement).value = p?.notes ?? '';
-  $('pipelineSaved').textContent = p?.updatedAt ? `Last saved ${new Date(p.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+  showLastSaved(p);
   showDue();
+}
+
+function showLastSaved(p: ReturnType<typeof cleanPipeline>) {
+  $('pipelineSaved').textContent = p?.updatedAt ? `Last saved ${new Date(p.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
 }
 
 /** Show a pipeline saved elsewhere, leaving alone what the user is still typing here */
 function refreshPipeline(p: ReturnType<typeof cleanPipeline>) {
   const set = (field: PipelineField, el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) => {
     // Writing the same text back would move the cursor in the notes box
-    if (!unsaved.has(field) && el.value !== value) el.value = value;
+    if (!unsaved.has(field) && !saving.has(field) && el.value !== value) el.value = value;
   };
   set('status', $('pipelineStatus') as HTMLSelectElement, p?.status ?? 'new');
   set('followUp', $('pipelineFollowUp') as HTMLInputElement, p?.followUp ?? '');
   set('notes', $('pipelineNotes') as HTMLTextAreaElement, p?.notes ?? '');
+  if (saving.size === 0) showLastSaved(p);
   showDue();
 }
 
@@ -237,15 +255,20 @@ function showDue() {
 }
 
 async function saveThePipeline() {
-  const saving = [...unsaved];
+  // A listing deleted meanwhile has no user data any more; don't bring it back
+  if (!listing || unsaved.size === 0) return;
+  const fields = [...unsaved];
   unsaved.clear();
+  for (const field of fields) saving.add(field);
   const typed = readPipeline();
   try {
-    await updatePipeline(key, Object.fromEntries(saving.map((field) => [field, typed[field]])));
+    await updatePipeline(key, Object.fromEntries(fields.map((field) => [field, typed[field]])));
     $('pipelineSaved').textContent = 'Saved';
   } catch (error: any) {
-    for (const field of saving) unsaved.add(field);
+    for (const field of fields) unsaved.add(field);
     $('pipelineSaved').textContent = `Could not save: ${error.message}`;
+  } finally {
+    for (const field of fields) saving.delete(field);
   }
 }
 
@@ -308,6 +331,7 @@ function readForm(): DealInputs {
 }
 
 async function save() {
+  saveTimer = undefined;
   if (!listing) return;
   const current = readForm();
   const fromListing = dealInputsFor(listing);

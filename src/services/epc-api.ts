@@ -21,8 +21,8 @@ const EPC_API_ROOT = 'https://api.get-energy-performance-data.communities.gov.uk
 const EPC_API_BASE = `${EPC_API_ROOT}/api/domestic/search`;
 
 // Full certificate: dwelling_type, habitable_room_count, total_floor_area.
-// If it answers 400/404/405 we stop asking for details for a while and rank
-// on address alone.
+// If it answers 400/404/405, or does not answer in time, we stop asking for
+// details for a while and rank on address alone.
 const EPC_CERTIFICATE_URL = `${EPC_API_ROOT}/api/certificate`;
 
 /** How long certificate lookups stay off after one of those answers */
@@ -67,18 +67,18 @@ export async function searchEpc(
   const searchParams = new URLSearchParams({ postcode: params.postcode });
   const url = `${EPC_API_BASE}?${searchParams.toString()}`;
 
+  // The time limit covers reading the answer too, so both are in here
+  const timedOut = (error: unknown) => {
+    if (isTimeout(error)) throw new Error(`EPC API did not answer in ${SEARCH_TIMEOUT_MS / 1000} seconds. Try again in a moment`);
+    throw error;
+  };
   const response = await fetch(url, {
     headers: {
       'Accept': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
     signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-  }).catch((error: unknown) => {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error(`EPC API did not answer in ${SEARCH_TIMEOUT_MS / 1000} seconds. Try again in a moment`);
-    }
-    throw error;
-  });
+  }).catch(timedOut);
 
   // The API answers 404 when no certificates match the search
   if (response.status === 404) return [];
@@ -97,8 +97,13 @@ export async function searchEpc(
     throw new Error(`EPC API: HTTP ${response.status}`);
   }
 
-  const body = await response.json();
+  const body = await response.json().catch(timedOut);
   return extractRows(body).map(toEpcResult);
+}
+
+/** A request given up by AbortSignal.timeout */
+function isTimeout(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'TimeoutError';
 }
 
 /**
@@ -249,6 +254,8 @@ export async function fetchCertificateDetails(
 
     return readDetails(await response.json());
   } catch (error) {
+    // A lookup that hangs would make every capture wait 10 s per pair, so pause them too
+    if (isTimeout(error)) lookupsPausedUntil = Date.now() + LOOKUP_PAUSE_MS;
     console.warn('PropSnap: certificate lookup failed:', error);
     return null;
   }
