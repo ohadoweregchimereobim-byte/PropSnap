@@ -127,14 +127,21 @@ export class RightmoveAdapter implements SiteAdapter {
    */
   private readModelFromPage(): Promise<unknown | null> {
     return new Promise((resolve) => {
-      const handler = (event: Event) => {
+      // Whichever comes first, the answer or the timeout, tidies up after itself
+      const finish = (value: unknown | null) => {
+        clearTimeout(timer);
         document.removeEventListener('__PROPSNAP_DATA__', handler);
+        resolve(value);
+      };
+      const handler = (event: Event) => {
         try {
-          resolve(JSON.parse((event as CustomEvent).detail));
+          finish(JSON.parse((event as CustomEvent).detail));
         } catch {
-          resolve(null);
+          finish(null);
         }
       };
+      // A page whose rules block the script never answers
+      const timer = setTimeout(() => finish(null), 3000);
 
       document.addEventListener('__PROPSNAP_DATA__', handler);
 
@@ -155,9 +162,6 @@ export class RightmoveAdapter implements SiteAdapter {
       `;
       document.documentElement.appendChild(script);
       script.remove();
-
-      // Timeout after 3 seconds
-      setTimeout(() => resolve(null), 3000);
     });
   }
 

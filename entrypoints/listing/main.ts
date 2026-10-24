@@ -6,7 +6,8 @@
  * from the listing's own figures are kept, so a new price still flows in.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { getListings } from '../../src/services/storage';
+import { getListings, LISTINGS_KEY } from '../../src/services/storage';
+import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import { getUserData, listingKey, saveDealInputs, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import { cleanPipeline, followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { safeLink } from '../../src/services/dashboard-view';
@@ -21,14 +22,6 @@ import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-r
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { buildReport, type Report } from '../../src/services/report';
 import { FEW_SALES, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES } from '../../src/services/sold-prices';
-
-const LISTINGS_KEY = 'propsnap_listings';
-
-const SITE_NAMES: Record<PropertyListing['source'], string> = {
-  rightmove: 'Rightmove',
-  zoopla: 'Zoopla',
-  openrent: 'OpenRent',
-};
 
 const $ = (id: string) => document.getElementById(id)!;
 const form = $('dealForm') as HTMLFormElement;
@@ -654,9 +647,7 @@ function rows(list: HTMLElement, items: Row[]) {
   }));
 }
 
-function money(value: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(Math.round(value));
-}
+const money = formatMoney;
 
 function pct(value: number): string {
   return `${value.toFixed(2)}%`;

@@ -6,12 +6,13 @@
  * a new capture is saved, so it stays live while open.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { chooseAddress, clearListings, deleteListing, getListings, listingsToCsv } from '../../src/services/storage';
+import { chooseAddress, clearListings, deleteListing, getListings, LISTINGS_KEY, listingsToCsv } from '../../src/services/storage';
+import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
 import { describeChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
-import { getAllUserData, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
+import { getAllUserData, listingKey, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import {
   applyView,
   DEFAULT_VIEW,
@@ -22,8 +23,6 @@ import {
   type SortKey,
   type ViewOptions,
 } from '../../src/services/dashboard-view';
-
-const STORAGE_KEY = 'propsnap_listings';
 
 const rowsEl = document.getElementById('rows')!;
 const emptyEl = document.getElementById('empty')!;
@@ -47,12 +46,6 @@ const stats = {
   due: document.getElementById('statDue')!,
 };
 
-const SITE_NAMES: Record<PropertyListing['source'], string> = {
-  rightmove: 'Rightmove',
-  zoopla: 'Zoopla',
-  openrent: 'OpenRent',
-};
-
 const BADGES: Record<ReturnType<typeof matchGroup>, { text: string; style: string }> = {
   exact: { text: 'Exact', style: 'exact' },
   user_choice: { text: 'Your choice', style: 'chosen' },
@@ -66,7 +59,7 @@ const picked = new Set<string>();
 const planBtn = document.getElementById('planBtn') as HTMLButtonElement;
 // Pickers the user opened stay open when the table redraws after a choice
 const openPickers = new Set<string>();
-const rowKey = (l: PropertyListing) => `${l.source}:${l.listingId}`;
+const rowKey = listingKey;
 let listings: PropertyListing[] = [];
 let userData: UserDataMap = {};
 
@@ -110,8 +103,8 @@ async function init() {
   // A capture in another tab saves here too, so redraw when storage changes
   // The change carries the new value, so there is nothing to read back
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !(STORAGE_KEY in changes || USER_DATA_KEY in changes)) return;
-    if (STORAGE_KEY in changes) listings = (changes[STORAGE_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
+    if (area !== 'local' || !(LISTINGS_KEY in changes || USER_DATA_KEY in changes)) return;
+    if (LISTINGS_KEY in changes) listings = (changes[LISTINGS_KEY]!.newValue as PropertyListing[] | undefined) ?? [];
     if (USER_DATA_KEY in changes) userData = (changes[USER_DATA_KEY]!.newValue as UserDataMap | undefined) ?? {};
     render();
   });
@@ -442,13 +435,6 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-// One formatter for every price on the page; making one per cell is slow
-const MONEY = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
-
-function formatMoney(value: number): string {
-  return MONEY.format(value);
 }
 
 function formatPrice(l: PropertyListing): string {

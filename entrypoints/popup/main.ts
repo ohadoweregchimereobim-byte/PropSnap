@@ -11,7 +11,10 @@
 
 import { downloadCsv } from '../../src/services/csv-download';
 import { latestMove } from '../../src/services/price-history';
-import { getListings, saveSettings } from '../../src/services/storage';
+import { getListings, getSettings, saveSettings } from '../../src/services/storage';
+import { formatMoney, SITE_NAMES } from '../../src/services/format';
+import { getAdapterForUrl } from '../../src/adapters';
+import type { PropertyListing } from '../../src/adapters/types';
 
 // DOM elements
 const statusEl = document.getElementById('status')!;
@@ -73,20 +76,11 @@ async function checkCurrentTab() {
     return;
   }
 
-  const supported = [
-    /rightmove\.co\.uk\/properties\/\d+/,
-    /zoopla\.co\.uk\/(for-sale|to-rent)\/details\/\d+/,
-    /openrent\.(co\.uk|com)\/property-to-rent\/.+\/\d+/,
-  ];
+  // The same check the page's content script makes, so the two always agree
+  const adapter = getAdapterForUrl(tab.url);
 
-  const isListing = supported.some((p) => p.test(tab.url!));
-
-  if (isListing) {
-    const site = tab.url!.includes('rightmove') ? 'Rightmove'
-      : tab.url!.includes('zoopla') ? 'Zoopla'
-      : 'OpenRent';
-
-    setStatus(`${site} listing detected — ready to capture`, 'ready');
+  if (adapter) {
+    setStatus(`${SITE_NAMES[adapter.site]} listing detected — ready to capture`, 'ready');
     captureBtn.disabled = false;
   } else {
     setStatus('Navigate to a Rightmove, Zoopla, or OpenRent listing', '');
@@ -161,7 +155,7 @@ async function handleCapture() {
 /**
  * Display a captured listing in the result card.
  */
-function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail?: string) {
+function displayResult(listing: PropertyListing, enrichmentStatus?: string, enrichmentDetail?: string) {
   fields.address.textContent = listing.displayAddress || '—';
 
   if (listing.fullAddress) {
@@ -188,15 +182,11 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
   fields.agent.textContent = listing.agentName || '—';
   fields.phone.textContent = listing.agentPhone || '—';
   fields.epc.textContent = listing.epcRating || '—';
-  fields.source.textContent = listing.source || '—';
+  fields.source.textContent = SITE_NAMES[listing.source] ?? listing.source ?? '—';
 
   // Format price
   if (listing.price) {
-    const formatted = new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP',
-      maximumFractionDigits: 0,
-    }).format(listing.price);
+    const formatted = formatMoney(listing.price);
     const suffix = listing.listingType === 'rent' ? '/pcm' : '';
     fields.price.textContent = `${formatted}${suffix}`;
   } else {
@@ -208,10 +198,9 @@ function displayResult(listing: any, enrichmentStatus?: string, enrichmentDetail
   const moveEl = document.getElementById('resultPriceMove')!;
   moveEl.hidden = !move || move.seenAt !== listing.capturedAt;
   if (move) {
-    const money = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
     const down = move.to < move.from;
     moveEl.className = `price-move ${down ? 'price-reduced' : 'price-increased'}`;
-    moveEl.textContent = `${down ? 'Price reduced' : 'Price up'} since your last capture: ${money(move.from)} → ${money(move.to)}`;
+    moveEl.textContent = `${down ? 'Price reduced' : 'Price up'} since your last capture: ${formatMoney(move.from)} → ${formatMoney(move.to)}`;
   }
 
   resultCard.hidden = false;
@@ -251,12 +240,10 @@ function toggleSettings() {
  * Load saved settings into the form.
  */
 async function loadSettings() {
-  const data = await chrome.storage.local.get('propsnap_settings');
-  const settings = (data.propsnap_settings ?? {}) as Record<string, unknown>;
-
-  epcTokenInput.value = (settings.epcApiToken as string) ?? '';
-  autoEnrichCheckbox.checked = (settings.autoEnrich as boolean) ?? true;
-  floorAreaFromTextCheckbox.checked = (settings.floorAreaFromText as boolean) ?? true;
+  const settings = await getSettings();
+  epcTokenInput.value = settings.epcApiToken;
+  autoEnrichCheckbox.checked = settings.autoEnrich;
+  floorAreaFromTextCheckbox.checked = settings.floorAreaFromText;
 }
 
 /**

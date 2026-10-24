@@ -1,12 +1,12 @@
 import type { PropertyListing } from '../adapters/types';
 import { chooseCandidate, keepUserChoice } from './address-choice';
-import { clearUserData, removeUserData, type UserDataMap } from './user-data';
+import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, statusLabel } from './pipeline';
 import { priceChange, withPriceHistory } from './price-history';
 import { withLock } from './storage-lock';
 
-const STORAGE_KEY = 'propsnap_listings';
-const SETTINGS_KEY = 'propsnap_settings';
+export const LISTINGS_KEY = 'propsnap_listings';
+export const SETTINGS_KEY = 'propsnap_settings';
 
 export interface PropSnapSettings {
   epcApiToken: string;
@@ -26,21 +26,19 @@ const DEFAULT_SETTINGS: PropSnapSettings = {
  * prices seen before, are kept).
  */
 export function saveListing(listing: PropertyListing): Promise<PropertyListing> {
-  return withLock(STORAGE_KEY, async () => {
+  return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
 
     // Deduplicate by listingId + source
-    const key = `${listing.source}:${listing.listingId}`;
-    const previous = existing.find((l) => `${l.source}:${l.listingId}` === key);
-    const filtered = existing.filter(
-      (l) => `${l.source}:${l.listingId}` !== key
-    );
+    const key = listingKey(listing);
+    const previous = existing.find((l) => listingKey(l) === key);
+    const filtered = existing.filter((l) => listingKey(l) !== key);
 
     // Keep the user's pick of home, and every price seen before
     const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
     filtered.unshift(saved); // Most recent first
 
-    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+    await chrome.storage.local.set({ [LISTINGS_KEY]: filtered });
     return saved;
   });
 }
@@ -49,21 +47,21 @@ export function saveListing(listing: PropertyListing): Promise<PropertyListing> 
  * Get all saved listings from storage.
  */
 export async function getListings(): Promise<PropertyListing[]> {
-  const data = await chrome.storage.local.get(STORAGE_KEY);
-  return (data[STORAGE_KEY] as PropertyListing[] | undefined) ?? [];
+  const data = await chrome.storage.local.get(LISTINGS_KEY);
+  return (data[LISTINGS_KEY] as PropertyListing[] | undefined) ?? [];
 }
 
 /**
  * Set a saved listing's full address to the close home the user picked.
  */
 export function chooseAddress(source: string, listingId: string, certificateNumber: string): Promise<void> {
-  return withLock(STORAGE_KEY, async () => {
+  return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
     const index = existing.findIndex((l) => l.source === source && l.listingId === listingId);
     if (index === -1) throw new Error('Listing not found');
 
     existing[index] = chooseCandidate(existing[index]!, certificateNumber);
-    await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+    await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
   });
 }
 
@@ -72,12 +70,10 @@ export function chooseAddress(source: string, listingId: string, certificateNumb
  */
 export async function deleteListing(source: string, listingId: string): Promise<void> {
   const key = `${source}:${listingId}`;
-  await withLock(STORAGE_KEY, async () => {
+  await withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
-    const filtered = existing.filter(
-      (l) => `${l.source}:${l.listingId}` !== key
-    );
-    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+    const filtered = existing.filter((l) => listingKey(l) !== key);
+    await chrome.storage.local.set({ [LISTINGS_KEY]: filtered });
   });
   await removeUserData(key);
 }
@@ -86,7 +82,7 @@ export async function deleteListing(source: string, listingId: string): Promise<
  * Clear all saved listings, and what the user typed in for them.
  */
 export async function clearListings(): Promise<void> {
-  await withLock(STORAGE_KEY, () => chrome.storage.local.remove(STORAGE_KEY));
+  await withLock(LISTINGS_KEY, () => chrome.storage.local.remove(LISTINGS_KEY));
   await clearUserData();
 }
 
@@ -152,7 +148,7 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
 
   const rows = listings.map((l) => {
     const change = priceChange(l);
-    const pipeline = cleanPipeline(userData[`${l.source}:${l.listingId}`]?.pipeline);
+    const pipeline = cleanPipeline(userData[listingKey(l)]?.pipeline);
     return [
     l.source,
     l.listingId,

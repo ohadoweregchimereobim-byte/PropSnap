@@ -1,7 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import { priceChange } from './price-history';
 import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
-import type { UserDataMap } from './user-data';
+import { listingKey, type UserDataMap } from './user-data';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -44,7 +44,7 @@ export function matchGroup(listing: PropertyListing): Exclude<MatchFilter, 'all'
 
 /** What the user saved for a listing in the pipeline, cleaned; null for none */
 export function pipelineOf(l: PropertyListing, userData: UserDataMap | undefined): Pipeline | null {
-  return cleanPipeline(userData?.[`${l.source}:${l.listingId}`]?.pipeline);
+  return cleanPipeline(userData?.[listingKey(l)]?.pipeline);
 }
 
 /** The user's context for filters that read their own data */

@@ -6,7 +6,8 @@
  * chrome.storage.local, so it is still there next time.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { getListings } from '../../src/services/storage';
+import { getListings, LISTINGS_KEY } from '../../src/services/storage';
+import { formatMoney } from '../../src/services/format';
 import { listingKey } from '../../src/services/user-data';
 import { localDate } from '../../src/services/pipeline';
 import {
@@ -22,7 +23,6 @@ import {
   type ViewingPlan,
 } from '../../src/services/viewing-plan';
 
-const LISTINGS_KEY = 'propsnap_listings';
 const $ = (id: string) => document.getElementById(id)!;
 const dateInput = $('planDate') as HTMLInputElement;
 const startInput = $('planStart') as HTMLInputElement;
@@ -87,7 +87,10 @@ async function init() {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'local' || !(LISTINGS_KEY in changes)) return;
     await loadListings();
-    plan.keys = plan.keys.filter((k) => byKey.has(k));
+    // Homes deleted elsewhere leave the plan, with their times
+    const before = plan.keys.length;
+    plan = cleanPlan(plan, new Set(byKey.keys()), localDate(new Date()));
+    if (plan.keys.length !== before) save();
     render();
   });
 
@@ -151,7 +154,7 @@ function stopItem(key: string, index: number, clash: boolean): HTMLLIElement {
   const facts = document.createElement('div');
   facts.className = 'stop-facts';
   const price = l.price
-    ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(l.price) + (l.listingType === 'rent' ? ' pcm' : '')
+    ? formatMoney(l.price) + (l.listingType === 'rent' ? ' pcm' : '')
     : null;
   facts.textContent = [l.postcode || l.postcodePartial, price, l.bedrooms != null ? `${l.bedrooms} bed` : null, l.propertyType].filter(Boolean).join(' · ');
   info.append(address, facts);
@@ -238,7 +241,6 @@ function renderLinks() {
 }
 
 function downloadCalendar() {
-  const money = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
   const ics = calendarFile(plan.date, plan.minutesEach, plan.keys.map((key) => {
     const l = byKey.get(key)!;
     const name = l.fullAddress || l.displayAddress;
@@ -248,7 +250,7 @@ function downloadCalendar() {
       title: `Viewing: ${name}`,
       location: mapsPlace(l),
       details: [
-        l.price ? `${l.priceQualifier ? `${l.priceQualifier} ` : ''}${money(l.price)}${l.listingType === 'rent' ? ' a month' : ''}` : '',
+        l.price ? `${l.priceQualifier ? `${l.priceQualifier} ` : ''}${formatMoney(l.price)}${l.listingType === 'rent' ? ' a month' : ''}` : '',
         l.agentName || l.agentPhone ? `Agent: ${[l.agentName, l.agentPhone].filter(Boolean).join(', ')}` : '',
         l.url,
       ],

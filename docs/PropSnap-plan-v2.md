@@ -1,5 +1,7 @@
 # PropSnap: Product and Build Plan (v2 — Updated 2 October 2026)
 
+> Historical document from early October 2026. What PropSnap does now is described in `CLAUDE.md` at the root of the repo.
+
 ## Context
 
 PropSnap is a Chrome extension plus web dashboard for UK property professionals (letting agents, deal sourcers, investors, serviced accommodation operators). The extension spots a listing page on Rightmove, Zoopla, OpenRent and similar, pulls out the key fields, and sends them to a backend. The dashboard is where captured properties get organised, compared and exported.

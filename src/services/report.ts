@@ -1,4 +1,5 @@
 import type { PropertyListing } from '../adapters/types';
+import { formatMoney, SITE_NAMES } from './format';
 import type { BrrResult, BuyToLetResult, DealInputs } from './calculators';
 import { describeChange, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
@@ -42,10 +43,9 @@ export interface ReportInput {
   generatedAt: Date;
 }
 
-const SITE_NAMES: Record<PropertyListing['source'], string> = { rightmove: 'Rightmove', zoopla: 'Zoopla', openrent: 'OpenRent' };
 const SOLD_ROWS = 20;
 
-const money = (n: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(Math.round(n));
+const money = formatMoney;
 const pct = (n: number) => `${n.toFixed(2)}%`;
 const date = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const monthYear = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
