@@ -17,6 +17,7 @@ import { getAgentNotes, getAllUserData, listingKey, setHidden, updatePipeline, U
 import { AGENTS_KEY, allLabels, cleanActivity, cleanLabels, groupByAgent, lastCall, outcomeLabel, whenText, type AgentNotes } from '../../src/services/crm';
 import {
   applyView,
+  areaFlags,
   DEFAULT_VIEW,
   matchGroup,
   isHidden,
@@ -40,6 +41,7 @@ const statusSelect = document.getElementById('statusFilter') as HTMLSelectElemen
 const labelSelect = document.getElementById('labelFilter') as HTMLSelectElement;
 const hiddenSelect = document.getElementById('hiddenFilter') as HTMLSelectElement;
 const daysSelect = document.getElementById('daysFilter') as HTMLSelectElement;
+const areaSelect = document.getElementById('areaFilter') as HTMLSelectElement;
 const groupBox = document.getElementById('groupByAgent') as HTMLInputElement;
 const sortButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('th button[data-sort]'));
 
@@ -89,6 +91,7 @@ async function init() {
   labelSelect.addEventListener('change', () => { view.label = labelSelect.value; render(); });
   hiddenSelect.addEventListener('change', () => { view.hidden = hiddenSelect.value as ViewOptions['hidden']; render(); });
   daysSelect.addEventListener('change', () => { view.minDays = Number(daysSelect.value) || 0; render(); });
+  areaSelect.addEventListener('change', () => { view.area = areaSelect.value as ViewOptions['area']; render(); });
   groupBox.addEventListener('change', render);
 
   for (const button of sortButtons) {
@@ -310,6 +313,21 @@ function addressCell(l: PropertyListing): HTMLTableCellElement {
     listed.className = 'address-listing';
     listed.textContent = `Listed as: ${l.displayAddress}`;
     td.append(listed);
+  }
+
+  // Area warnings from the last area check on the Details page
+  const flags = areaFlags(l);
+  if (flags.length) {
+    const box = document.createElement('div');
+    box.className = 'chips';
+    for (const flag of flags) {
+      const chip = document.createElement('span');
+      chip.className = 'chip chip-area';
+      chip.textContent = flag;
+      chip.title = `From the area checks on ${new Date(l.area!.checkedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      box.append(chip);
+    }
+    td.append(box);
   }
 
   // On a best guess (or after a pick) let the user choose from the close homes

@@ -2,6 +2,7 @@ import type { PropertyListing } from '../adapters/types';
 import { formatMoney, SITE_NAMES } from './format';
 import { customCostTotals, sourcingFee, type BrrResult, type BuyToLetResult, type DealInputs, type FlipResult, type HmoResult } from './calculators';
 import { headingColour, isBranded, type Branding } from './branding';
+import { FLOOD_WORDS, type AreaChecks } from './area-checks';
 import { daysOnMarket, describeChange, describePortalChanges, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
@@ -73,6 +74,8 @@ export interface ReportInput {
   includeNotes: boolean;
   generatedAt: Date;
   branding?: Branding | null;
+  /** The area checks shown on the page, and what each rights code means */
+  area?: { checks: AreaChecks; rightsNames: Record<string, string>; wales: boolean } | null;
 }
 
 const SOLD_ROWS = 20;
@@ -359,12 +362,39 @@ function notesSection(input: ReportInput): ReportSection | null {
   return section;
 }
 
+function areaSection({ checks: a, rightsNames, wales }: NonNullable<ReportInput['area']>): ReportSection {
+  const a4 = a.article4;
+  const monthName = (ym: string) => new Date(`${ym}-01T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const notes = [
+    a.point.source === 'listing' ? 'Checked at the map position the listing gives.' : 'Checked at the centre of the postcode.',
+    'National planning data does not yet hold every council\'s conservation areas and Article 4 directions: check with the council.',
+    'Sources: Environment Agency, Natural Resources Wales, planning.data.gov.uk, DataMapWales, data.police.uk. Contains public sector information licensed under the Open Government Licence v3.0.',
+  ];
+  if (a.failed.length) notes.unshift(`Could not check ${a.failed.join(', ')}.`);
+  return {
+    heading: 'Area checks',
+    rows: compact([
+      ['Flood risk', a.flood ? `${FLOOD_WORDS[a.flood.zone]}${a.flood.by ? ` (${a.flood.by})` : ''}` : 'Could not check'],
+      ['Conservation area', a.conservation ? (a.conservation.length ? a.conservation.map((c) => c.name).join(', ') : 'None found') : 'Could not check'],
+      ['Article 4', !a4 ? 'Could not check'
+        : a4.length === 0 ? (wales ? 'No national Article 4 map for Wales: ask the council about HMOs' : 'None found')
+        : a4.map((d) => `${d.name}${d.rights.length ? ` (removes ${d.rights.map((r) => rightsNames[r] ?? `class ${r}`).join('; ')})` : ''}`).join('. ')],
+      ['HMO Article 4', a4 && a4.some((d) => d.hmo) ? 'Yes: a small HMO needs planning permission here' : null],
+      ['Street crime', a.crime
+        ? `${a.crime.total} within about a mile in ${monthName(a.crime.month)}${a.crime.byCategory.length ? ` (most: ${a.crime.byCategory.slice(0, 3).map((c) => `${c.label} ${c.count}`).join(', ')})` : ''}`
+        : 'Could not check'],
+    ]),
+    notes,
+  };
+}
+
 export function buildReport(input: ReportInput): Report {
   const l = input.listing;
   const sections: ReportSection[] = [propertySection(l, input.generatedAt)];
 
   const energy = energySection(l);
   if (energy) sections.push(energy);
+  if (input.area) sections.push(areaSection(input.area));
   const prices = priceSection(l);
   if (prices) sections.push(prices);
   if (input.sold) {

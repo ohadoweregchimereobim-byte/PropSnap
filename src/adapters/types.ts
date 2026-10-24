@@ -1,4 +1,5 @@
 import type { EpcEnergy } from '../services/epc-energy';
+import type { AreaSummary } from '../services/area-checks';
 
 /**
  * Normalised property listing data.
@@ -58,6 +59,9 @@ export interface PropertyListing {
   listedOn?: string | null;
   /** Price changes the site itself shows, with dates but no amounts, oldest first */
   portalPriceChanges?: PortalPriceChange[] | null;
+
+  /** The last area checks (flood, conservation, Article 4, crime), in short */
+  area?: AreaSummary | null;
 }
 
 /** A price change the listing site shows: the date and which way, without the amount */

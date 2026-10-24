@@ -3,6 +3,7 @@ import { daysOnMarket, priceMoved, wasIncreased, wasReduced } from './price-hist
 import { cleanPipeline, isActive, isDue, STATUSES, type Pipeline, type PipelineStatus } from './pipeline';
 import { listingKey, type UserDataMap } from './user-data';
 import { cleanActivity, cleanLabels } from './crm';
+import { cleanAreaSummary } from './area-checks';
 
 /**
  * Filter and sort logic for the dashboard page. Pure, so it is unit tested
@@ -14,6 +15,8 @@ export type MatchFilter = 'all' | 'exact' | 'user_choice' | 'best_guess' | 'none
 export type PriceFilter = 'all' | 'reduced' | 'increased' | 'changed';
 /** A pipeline stage, or every active deal, or follow-ups due today or before */
 export type StatusFilter = 'all' | 'active' | 'due' | PipelineStatus;
+/** Area checks: homes checked and clear of one thing, or with anything to look at */
+export type AreaFilter = 'all' | 'no-hmo-article4' | 'no-flood' | 'no-conservation' | 'flagged';
 /** Hidden homes: left out (default), shown with the rest, or shown alone */
 export type HiddenFilter = 'hide' | 'show' | 'only';
 export type SortKey = 'capturedAt' | 'source' | 'address' | 'postcode' | 'price' | 'bedrooms' | 'propertyType' | 'epcRating' | 'agentName' | 'status';
@@ -29,6 +32,7 @@ export interface ViewOptions {
   hidden: HiddenFilter;
   /** Only homes the site says have been on the market at least this many days; 0 for all */
   minDays: number;
+  area: AreaFilter;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
 }
@@ -42,6 +46,7 @@ export const DEFAULT_VIEW: ViewOptions = {
   label: 'all',
   hidden: 'hide',
   minDays: 0,
+  area: 'all',
   sortKey: 'capturedAt',
   sortDir: 'desc',
 };
@@ -71,6 +76,30 @@ export function labelsOf(l: PropertyListing, userData: UserDataMap | undefined):
 }
 
 export const isHidden = (l: PropertyListing, userData: UserDataMap | undefined) => userData?.[listingKey(l)]?.hidden === true;
+
+/** Flood zone 2 or 3, an HMO Article 4, or a conservation area: worth a look before buying */
+export function areaFlags(l: PropertyListing): string[] {
+  const a = cleanAreaSummary(l.area);
+  if (!a) return [];
+  return [
+    a.floodZone === 'FZ3' ? 'Flood zone 3' : a.floodZone === 'FZ2' ? 'Flood zone 2' : null,
+    a.hmoArticle4 ? 'HMO Article 4' : null,
+    a.conservation ? 'Conservation area' : null,
+  ].filter((f): f is string => f !== null);
+}
+
+/** Homes never checked, or whose check for that thing failed, never match a "no …" filter */
+function matchesArea(l: PropertyListing, filter: AreaFilter): boolean {
+  const a = cleanAreaSummary(l.area);
+  if (!a) return false;
+  switch (filter) {
+    case 'no-hmo-article4': return a.hmoArticle4 === false;
+    case 'no-flood': return a.floodZone === 'none';
+    case 'no-conservation': return a.conservation === '';
+    case 'flagged': return areaFlags(l).length > 0;
+    default: return true;
+  }
+}
 
 function searchText(l: PropertyListing, pipeline: Pipeline | null, labels: string[], userData: UserDataMap | undefined): string {
   // The summary and every note and call in the timeline
@@ -116,6 +145,7 @@ export function applyView(listings: PropertyListing[], view: ViewOptions, contex
     if (view.price === 'increased' && !wasIncreased(l)) return false;
     if (view.price === 'changed' && !priceMoved(l)) return false;
     if (view.minDays > 0 && !((daysOnMarket(l, context.today) ?? -1) >= view.minDays)) return false;
+    if (view.area !== 'all' && !matchesArea(l, view.area)) return false;
     if (words.length === 0) return true;
     const text = searchText(l, pipeline, labels, context.userData);
     return words.every((w) => text.includes(w));

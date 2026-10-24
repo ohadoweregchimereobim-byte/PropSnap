@@ -432,6 +432,11 @@ th button[aria-sort='descending']::after {
   white-space: nowrap;
 }
 
+.chip-area {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .last-call {
   margin-top: 3px;
   font-size: 11px;

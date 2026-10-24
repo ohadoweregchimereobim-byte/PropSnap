@@ -185,6 +185,26 @@ describe('buildReport', () => {
     expect(row(buildReport(input()), 'Property', 'On the market')).toBeUndefined();
   });
 
+  it('adds the area checks when the page has them', () => {
+    const checks = {
+      checkedAt: '2026-10-24T12:00:00Z', point: { lat: 51.48, lng: -3.19, source: 'listing' as const },
+      flood: { zone: 'FZ3' as const, by: 'Natural Resources Wales', sourceOfFlooding: null },
+      conservation: [{ name: 'Cathedral Road', council: 'Cardiff', designated: '1972-04-01' }],
+      article4: [{ name: 'HMO', rights: ['3L'], hmo: true, description: null }],
+      crime: { month: '2026-08', total: 286, byCategory: [{ category: 'violent-crime', label: 'Violence and sexual offences', count: 60 }] },
+      failed: [],
+    };
+    const r = buildReport(input({ area: { checks, rightsNames: { '3L': 'Small HMOs to dwellinghouses and vice versa' }, wales: false } }));
+    expect(row(r, 'Area checks', 'Flood risk')).toBe('Flood Zone 3: high chance of flooding from rivers or the sea (Natural Resources Wales)');
+    expect(row(r, 'Area checks', 'Conservation area')).toBe('Cathedral Road');
+    expect(row(r, 'Area checks', 'Article 4')).toBe('HMO (removes Small HMOs to dwellinghouses and vice versa)');
+    expect(row(r, 'Area checks', 'HMO Article 4')).toBe('Yes: a small HMO needs planning permission here');
+    expect(row(r, 'Area checks', 'Street crime')).toBe('286 within about a mile in August 2026 (most: Violence and sexual offences 60)');
+    expect(section(buildReport(input()), 'Area checks')).toBeUndefined();
+    const welsh = buildReport(input({ area: { checks: { ...checks, article4: [] }, rightsNames: {}, wales: true } }));
+    expect(row(welsh, 'Area checks', 'Article 4')).toBe('No national Article 4 map for Wales: ask the council about HMOs');
+  });
+
   it('says it is not advice', () => {
     expect(buildReport(input()).footer).toContain('Not financial or tax advice');
   });

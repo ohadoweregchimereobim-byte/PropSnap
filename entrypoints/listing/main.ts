@@ -6,7 +6,7 @@
  * from the listing's own figures are kept, so a new price still flows in.
  */
 import type { PropertyListing } from '../../src/adapters/types';
-import { getListings, LISTINGS_KEY } from '../../src/services/storage';
+import { getListings, LISTINGS_KEY, setAreaSummary } from '../../src/services/storage';
 import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import {
   addActivity,
@@ -54,11 +54,13 @@ import {
   flip,
   hmo,
   RATES_YEAR,
+  taxRegionFromPostcode,
   type CustomCost,
   type DealInputs,
 } from '../../src/services/calculators';
 import { BRANDING_KEY, cleanBranding, getBranding, logoProblem, saveBranding, type Branding } from '../../src/services/branding';
 import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
+import { fetchAreaChecksCached, findAreaPoint, FLOOD_WORDS, rightsNames, summariseArea, type AreaChecks } from '../../src/services/area-checks';
 import { daysOnMarket, describeChange, describePortalChanges, portalChanges, priceChange } from '../../src/services/price-history';
 import { buildReport, defaultStrategies, type Report, type Strategies } from '../../src/services/report';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES, type Flip } from '../../src/services/sold-prices';
@@ -132,6 +134,7 @@ async function init() {
   $('typeFilter').addEventListener('change', renderSold);
   $('sinceYears').addEventListener('change', renderSold);
   $('soldRefresh').addEventListener('click', () => loadSold(true));
+  $('areaRefresh').addEventListener('click', () => loadArea(true));
   $('useMedian').addEventListener('click', () => {
     const value = Number(($('useMedian') as HTMLButtonElement).dataset.value);
     const input = form.querySelector<HTMLInputElement>('[data-field=valueAfterRefurb]');
@@ -206,6 +209,9 @@ async function loadListing(firstLoad: boolean) {
     } else {
       renderSold();
     }
+    if (firstLoad || before?.latitude !== listing.latitude || before?.longitude !== listing.longitude || before?.postcode !== listing.postcode) {
+      loadArea();
+    }
   } catch (error: any) {
     setStatus(`Could not read the listing: ${error.message}`);
   }
@@ -216,6 +222,7 @@ function showHeader() {
   $('missing').hidden = !missing;
   $('calculator').hidden = missing;
   $('sold').hidden = missing;
+  $('area').hidden = missing;
   $('pipeline').hidden = missing;
   $('agent').hidden = missing || !agentKey(listing ?? { agentName: null, agentBranch: null });
   $('writeLetter').hidden = missing;
@@ -912,6 +919,116 @@ function setTypeFilter() {
 }
 
 /** Sold prices kept from earlier today show at once; `fresh` asks Land Registry again */
+// ── Area checks ──────────────────────────────────────────────────────────
+
+let areaRequest = 0;
+/** The checks shown now, for the report */
+let areaShown: AreaChecks | null = null;
+let areaRightsNames: Record<string, string> = {};
+
+/** Wales by the postcode; a border postcode counts as not sure */
+function isWales(l: PropertyListing): boolean {
+  const { region, sure } = taxRegionFromPostcode(l.postcode || l.postcodePartial);
+  return region === 'wales' && sure;
+}
+
+async function loadArea(fresh = false) {
+  if (!listing) return;
+  const request = ++areaRequest;
+  const l = listing;
+  areaShown = null;
+  $('areaBody').hidden = true;
+  const showStatus = (text: string) => { $('areaStatus').hidden = false; $('areaStatus').textContent = text; };
+
+  const point = await findAreaPoint(l);
+  if (request !== areaRequest) return;
+  if (!point) {
+    $('areaWhere').textContent = '';
+    showStatus('PropSnap needs the map position from the listing, or the full postcode, to check the area. This listing has neither.');
+    return;
+  }
+  $('areaWhere').textContent = point.source === 'listing'
+    ? `Checked at the map position ${SITE_NAMES[l.source]} gives for this home.`
+    : `Checked at the centre of the postcode ${l.postcode}, as the listing has no map position. A boundary can run through a postcode.`;
+  showStatus('Asking the Environment Agency, Natural Resources Wales, the planning data service and the police…');
+
+  try {
+    const [checks, names] = await Promise.all([fetchAreaChecksCached(point, { fresh }), rightsNames()]);
+    if (request !== areaRequest) return;
+    areaShown = checks;
+    areaRightsNames = names;
+    $('areaStatus').hidden = checks.failed.length === 0;
+    $('areaStatus').textContent = checks.failed.length ? `Could not check ${checks.failed.join(', ')} just now. Click Check again to try again.` : '';
+    renderArea(checks, names, l);
+    // Keep the short version for the dashboard and CSV
+    setAreaSummary(l.source, l.listingId, summariseArea(checks, { wales: isWales(l) })).catch(() => {});
+  } catch (error: any) {
+    if (request !== areaRequest) return;
+    showStatus(`Could not check the area: ${error.message}. Click Check again to try again.`);
+  }
+}
+
+function renderArea(a: AreaChecks, rightNames: Record<string, string>, l: PropertyListing) {
+  const wales = isWales(l);
+  const set = (id: string, text: string, tone: 'bad' | 'warn' | 'good' | 'none') => {
+    $(id).textContent = text;
+    $(id).className = `area-result area-${tone}`;
+  };
+  const list = (id: string, items: string[]) => {
+    $(id).replaceChildren(...items.map((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      return li;
+    }));
+  };
+
+  // Flood
+  if (!a.flood) set('areaFlood', 'Could not check', 'none');
+  else set('areaFlood', FLOOD_WORDS[a.flood.zone], a.flood.zone === 'FZ3' ? 'bad' : a.flood.zone === 'FZ2' ? 'warn' : 'good');
+  $('areaFloodNote').textContent = !a.flood ? ''
+    : a.flood.zone === 'none'
+      ? 'From the Flood Map for Planning. It does not cover surface water or groundwater: check the long term flood risk service too.'
+      : `${a.flood.by}'s Flood Map for Planning${a.flood.sourceOfFlooding ? ` (${a.flood.sourceOfFlooding})` : ''}. It can affect insurance, mortgages and planning. Check the long term flood risk service before you offer.`;
+
+  // Conservation
+  if (!a.conservation) set('areaConservation', 'Could not check', 'none');
+  else if (a.conservation.length) {
+    set('areaConservation', `Inside ${a.conservation.map((c) => `${c.name}${c.council ? ` (${c.council})` : ''}`).join(', ')}`, 'warn');
+  } else set('areaConservation', 'Not in a conservation area that has been mapped', 'good');
+  $('areaConservationNote').textContent = !a.conservation ? ''
+    : a.conservation.length
+      ? 'Extra planning control: changes to the outside (windows, doors, roofs, extensions) and demolition may need permission.'
+      : wales ? 'From the Welsh conservation area boundaries.' : 'Not every council has added its areas to the national data yet: check the council\'s map to be sure.';
+
+  // Article 4
+  const a4 = a.article4;
+  if (!a4) set('areaArticle4', 'Could not check', 'none');
+  else if (a4.some((d) => d.hmo)) set('areaArticle4', 'HMO Article 4: turning a house into a small HMO needs planning permission here', 'bad');
+  else if (a4.length) set('areaArticle4', `${a4.length} Article 4 direction${a4.length === 1 ? '' : 's'} here, none about HMOs`, 'warn');
+  else if (wales) set('areaArticle4', 'No national Article 4 map for Wales', 'none');
+  else set('areaArticle4', 'None found in the national planning data', 'good');
+  list('areaArticle4List', (a4 ?? []).map((d) => {
+    const removed = d.rights.map((r) => rightNames[r] ?? `class ${r}`);
+    return `${d.name}${removed.length ? `: removes ${removed.join('; ')}` : ''}`;
+  }));
+  $('areaArticle4Note').textContent = !a4 ? ''
+    : wales
+      ? 'In Wales, a council usually decides on turning a home into an HMO through a planning application, so there is no Article 4 map to check. Ask the council about its HMO policy.'
+      : 'Not every council has added its directions to the national data yet: check the council\'s website to be sure.';
+
+  // Crime
+  const c = a.crime;
+  const monthName = (ym: string) => new Date(`${ym}-01T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  if (!c) set('areaCrime', 'Could not check', 'none');
+  else set('areaCrime', `${c.total} street crime${c.total === 1 ? '' : 's'} within about a mile in ${monthName(c.month)}`, 'none');
+  list('areaCrimeList', (c?.byCategory ?? []).slice(0, 5).map((x) => `${x.label}: ${x.count}`));
+  $('areaCrimeNote').textContent = c
+    ? 'The latest month police.uk has. Busy streets, shops and town centres raise the count; compare with other homes you are looking at.'
+    : '';
+
+  $('areaBody').hidden = false;
+}
+
 async function loadSold(fresh = false) {
   if (!listing) return;
   const request = ++soldRequest;
@@ -972,6 +1089,7 @@ function saveReport() {
     sold: sales && sales.length ? { ...currentSoldView(listing, sales), where: soldWhereText } : null,
     deal: { inputs, btl: buyToLet(inputs), brr: brr(brrInputs), flip: flip(inputs), hmo: hmo(inputs), show: readStrategies() },
     branding,
+    area: areaShown ? { checks: areaShown, rightsNames: areaRightsNames, wales: isWales(listing) } : null,
     pipeline: cleanPipeline({ ...readPipeline(), updatedAt: '' }),
     labels: cleanLabels(allUserData[key]?.labels),
     activity: cleanActivity(allUserData[key]?.activity),

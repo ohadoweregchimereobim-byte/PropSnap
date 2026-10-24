@@ -115,6 +115,19 @@ describe('listingsToCsv', () => {
     expect(row(listing())['Days On Market']).toBe('');
   });
 
+  it('includes the area checks, blank when not checked', () => {
+    const cells = row(listing({ area: { checkedAt: '2026-10-24T12:00:00Z', floodZone: 'FZ3', conservation: 'Cathedral Road', article4Count: 1, hmoArticle4: true, crimeTotal: 286, crimeMonth: '2026-08' } }));
+    expect(cells['Flood Zone']).toBe('Zone 3');
+    expect(cells['Conservation Area']).toBe('Cathedral Road');
+    expect(cells['Article 4 Directions']).toBe('1');
+    expect(cells['HMO Article 4']).toBe('yes');
+    expect(cells['Street Crimes']).toBe('286 in 2026-08 (about 1 mile)');
+    expect(cells['Area Checked']).toBe('2026-10-24');
+    const clear = row(listing({ area: { checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none', conservation: '', article4Count: 0, hmoArticle4: false, crimeTotal: null, crimeMonth: null } }));
+    expect([clear['Flood Zone'], clear['Conservation Area'], clear['HMO Article 4'], clear['Street Crimes']]).toEqual(['No', 'No', 'no', '']);
+    expect(row(listing())['Flood Zone']).toBe('');
+  });
+
   it("includes the certificate's rating now and potential", () => {
     const cells = row(listing({ epcEnergy: { certificateNumber: 'c', currentBand: 'E', potentialBand: 'C', currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] } }));
     expect(cells['EPC Certificate Now']).toBe('E 50');
