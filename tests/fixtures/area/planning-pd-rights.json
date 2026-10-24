@@ -1,0 +1,35 @@
+{
+ "entities": [
+  {
+   "reference": "1A",
+   "name": "Enlargement, improvement or other alteration of a dwellinghouse",
+   "dataset": "permitted-development-right"
+  },
+  {
+   "reference": "1B",
+   "name": "Additions etc to the roof of a dwellinghouse",
+   "dataset": "permitted-development-right"
+  },
+  {
+   "reference": "2A",
+   "name": "Gates, fences, walls etc",
+   "dataset": "permitted-development-right"
+  },
+  {
+   "reference": "3L",
+   "name": "Small HMOs to dwellinghouses and vice versa",
+   "dataset": "permitted-development-right"
+  },
+  {
+   "reference": "3M",
+   "name": "Certain uses (launderette, betting office etc) to residential use (Class C3)",
+   "dataset": "permitted-development-right"
+  },
+  {
+   "reference": "11B",
+   "name": "Demolition of buildings",
+   "dataset": "permitted-development-right"
+  }
+ ],
+ "count": 6
+}

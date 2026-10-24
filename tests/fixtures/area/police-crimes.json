@@ -1,0 +1,584 @@
+[
+ {
+  "category": "anti-social-behaviour",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.502330",
+   "street": {
+    "id": 1866616,
+    "name": "On or near Highlands"
+   },
+   "longitude": "-3.133199"
+  },
+  "context": "",
+  "outcome_status": null,
+  "persistent_id": "",
+  "id": 137244414,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "anti-social-behaviour",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.498493",
+   "street": {
+    "id": 1865831,
+    "name": "On or near Hendy Street"
+   },
+   "longitude": "-3.170474"
+  },
+  "context": "",
+  "outcome_status": null,
+  "persistent_id": "",
+  "id": 137243707,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "bicycle-theft",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492073",
+   "street": {
+    "id": 1866317,
+    "name": "On or near Southminster Road"
+   },
+   "longitude": "-3.153241"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "3f872d2746d0c6fdc26161a8d0f63abb3438a89359fd1d365427344185dac0de",
+  "id": 137236616,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "bicycle-theft",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.499840",
+   "street": {
+    "id": 1866438,
+    "name": "On or near Ipswich Road"
+   },
+   "longitude": "-3.145153"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "41527feb157c8b610776bd833be09475e29a1d9a0882ad5a4f61fe681a48ce70",
+  "id": 137236645,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "burglary",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.501149",
+   "street": {
+    "id": 1865997,
+    "name": "On or near Further/higher Educational Building"
+   },
+   "longitude": "-3.165644"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Investigation complete; no suspect identified",
+   "date": "2026-08"
+  },
+  "persistent_id": "41e398f9bedf7babfda3f7ecc9e77dac0a43e53f84a487795a0124f357e30026",
+  "id": 137237927,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "burglary",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.496043",
+   "street": {
+    "id": 1866425,
+    "name": "On or near Petrol Station"
+   },
+   "longitude": "-3.146369"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "54998ea5e5ea2819a972445c428bd5b04f9455ac5aa86b5b95876074af6fb815",
+  "id": 137237944,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "criminal-damage-arson",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.494476",
+   "street": {
+    "id": 1866501,
+    "name": "On or near De Bawdip Road"
+   },
+   "longitude": "-3.141014"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Unable to prosecute suspect",
+   "date": "2026-08"
+  },
+  "persistent_id": "168b83c38333fcdc1fe0b2b2ff77bdf2b31b09cf2c9d44c92fa77529c809302d",
+  "id": 137240047,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "criminal-damage-arson",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.496671",
+   "street": {
+    "id": 1866565,
+    "name": "On or near Cwrt Coles"
+   },
+   "longitude": "-3.137222"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Investigation complete; no suspect identified",
+   "date": "2026-08"
+  },
+  "persistent_id": "cfd0160b73d9530ea7e0b2c01bc30f80cb6c7d6c8267c582a3ff405790114440",
+  "id": 137240064,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "drugs",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.495801",
+   "street": {
+    "id": 1866101,
+    "name": "On or near Alma Road"
+   },
+   "longitude": "-3.162641"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "ce83c0dd3cbc77d1d6c696a7e2d966c42a92a23714a0a80fec41d990c7a8d398",
+  "id": 137237237,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "drugs",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.495790",
+   "street": {
+    "id": 1866036,
+    "name": "On or near Balaclava Road"
+   },
+   "longitude": "-3.163764"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "1a926aa630aa382aa3013efe5ab28fb02f443ee49fcfc4947852e54ade7cf793",
+  "id": 137237249,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "other-theft",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492073",
+   "street": {
+    "id": 1866317,
+    "name": "On or near Southminster Road"
+   },
+   "longitude": "-3.153241"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "737dce83443ef9695ea04d2157585b0b914f8c6426913b3b820c77cbb2151f12",
+  "id": 137236423,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "other-theft",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.515419",
+   "street": {
+    "id": 1865950,
+    "name": "On or near Lomond Crescent"
+   },
+   "longitude": "-3.165648"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "3a8f1ebed52b7a541142652eca13fd7203fd1dd5b0ec4f22cd5a4ad5b3d16361",
+  "id": 137236460,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "possession-of-weapons",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.495790",
+   "street": {
+    "id": 1866036,
+    "name": "On or near Balaclava Road"
+   },
+   "longitude": "-3.163764"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "309e05b733095b6f3c051764cb0b2901cc13e7bc69d1e239220b4a73f81a8c92",
+  "id": 137237568,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "possession-of-weapons",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.517174",
+   "street": {
+    "id": 1866356,
+    "name": "On or near Coed-y-gores"
+   },
+   "longitude": "-3.148124"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "b754889c4d478b2e9750c92c2fcaebfae1dc2f511357e04336fce452029ecc82",
+  "id": 137237421,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "public-order",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.508776",
+   "street": {
+    "id": 1866642,
+    "name": "On or near Newport Road"
+   },
+   "longitude": "-3.132437"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "ba3a308792416340e1a4630f0b0251c085f0bfc2296e5894c6f80bdda8f519e4",
+  "id": 137241087,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "public-order",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.497165",
+   "street": {
+    "id": 1866284,
+    "name": "On or near Colchester Court"
+   },
+   "longitude": "-3.153830"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "a002975efbee76d6f847e350427318f7bd2451d672efad6b35ff3b9e2da9b32f",
+  "id": 137237359,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "robbery",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.497049",
+   "street": {
+    "id": 1865958,
+    "name": "On or near Montgomery Street"
+   },
+   "longitude": "-3.167412"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Unable to prosecute suspect",
+   "date": "2026-08"
+  },
+  "persistent_id": "5b9d6b6379a660fc93f5217dda3f60a4633579f0c8a1e6828056a80e1840dc8f",
+  "id": 137238085,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "robbery",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492762",
+   "street": {
+    "id": 1866281,
+    "name": "On or near St Margaret's Crescent"
+   },
+   "longitude": "-3.154468"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "d6cd8f6e16c5784df3161a3b1bd66486f244ab0715b66263d0922967f022e086",
+  "id": 137238031,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "shoplifting",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.495479",
+   "street": {
+    "id": 1866411,
+    "name": "On or near Shopping Area"
+   },
+   "longitude": "-3.148230"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "a51ebc417f7127b44c6bc916fcc65cdb2a825a6373cfc8d5a8c2e9a18475331b",
+  "id": 137242394,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "shoplifting",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.495479",
+   "street": {
+    "id": 1866411,
+    "name": "On or near Shopping Area"
+   },
+   "longitude": "-3.148230"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "59737c3cc9d44a72e82d03257bf337ff6bbfd2055d6b52ecbf4baa40cfb7ed7d",
+  "id": 137242444,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "theft-from-the-person",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492073",
+   "street": {
+    "id": 1866317,
+    "name": "On or near Southminster Road"
+   },
+   "longitude": "-3.153241"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "afedb01ca5bdfa7c7e90fe6b245b32ba3a3c957054a662da5774c93c5baa0935",
+  "id": 137236515,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "theft-from-the-person",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.504010",
+   "street": {
+    "id": 1866637,
+    "name": "On or near Ty-mawr Road"
+   },
+   "longitude": "-3.132391"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "3b682d5eb062a7261777960b2f40ef825e26d05e3061ec3aeba5f3d6aff374c3",
+  "id": 137236518,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "vehicle-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.517174",
+   "street": {
+    "id": 1866356,
+    "name": "On or near Coed-y-gores"
+   },
+   "longitude": "-3.148124"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "aea99fc2b8b5e75f6332dac1728e4826c982fdff2814b6aaf0a051153e7cd678",
+  "id": 137173404,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "vehicle-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492126",
+   "street": {
+    "id": 1866039,
+    "name": "On or near Cottrell Road"
+   },
+   "longitude": "-3.164233"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "622b3bfc45727bfca3231191d2d83aee12f77393724584a1d55584172c3a7b65",
+  "id": 137238258,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "violent-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.513869",
+   "street": {
+    "id": 1866341,
+    "name": "On or near Parking Area"
+   },
+   "longitude": "-3.151413"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "dcc68f496eada5f2f763e9077dd77d6fb2243c3eea76ef1dcb725d5a9e604e91",
+  "id": 137234220,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "violent-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.492354",
+   "street": {
+    "id": 1866399,
+    "name": "On or near Harlequin Court"
+   },
+   "longitude": "-3.148394"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Investigation complete; no suspect identified",
+   "date": "2026-08"
+  },
+  "persistent_id": "000ec5402c39f074ed3d46c30bc863b17a1df599c3020043fd28bb2789ab9d55",
+  "id": 137235615,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "other-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.510619",
+   "street": {
+    "id": 1866212,
+    "name": "On or near Ael-y-bryn"
+   },
+   "longitude": "-3.156389"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "8e884b46e76ce919ca40e5771e98628b7fd2cd3ea3d961b5d0a43671491b6ce6",
+  "id": 137236954,
+  "location_subtype": "",
+  "month": "2026-08"
+ },
+ {
+  "category": "other-crime",
+  "location_type": "Force",
+  "location": {
+   "latitude": "51.497316",
+   "street": {
+    "id": 1866229,
+    "name": "On or near Waterloo Road"
+   },
+   "longitude": "-3.156816"
+  },
+  "context": "",
+  "outcome_status": {
+   "category": "Under investigation",
+   "date": "2026-08"
+  },
+  "persistent_id": "0c527c02fd526d713977281261495840320cd45c855aadece9ffde1ecc32e27b",
+  "id": 137237027,
+  "location_subtype": "",
+  "month": "2026-08"
+ }
+]

@@ -133,6 +133,40 @@
       <p class="attribution">From the home's certificate on the government EPC register. Costs and savings are the assessor's typical figures from when the certificate was made.</p>
     </section>
 
+    <section id="area" class="area" hidden aria-labelledby="areaTitle">
+      <div class="section-head">
+        <h2 id="areaTitle">Area checks</h2>
+        <button id="areaRefresh" class="btn btn-small" type="button">Check again</button>
+      </div>
+      <p id="areaWhere" class="hint"></p>
+      <p id="areaStatus" class="notice" hidden></p>
+      <div id="areaBody" class="area-grid" hidden>
+        <article class="area-card">
+          <h3>Flood risk</h3>
+          <p id="areaFlood" class="area-result"></p>
+          <p id="areaFloodNote" class="hint"></p>
+        </article>
+        <article class="area-card">
+          <h3>Conservation area</h3>
+          <p id="areaConservation" class="area-result"></p>
+          <p id="areaConservationNote" class="hint"></p>
+        </article>
+        <article class="area-card">
+          <h3>Article 4 directions</h3>
+          <p id="areaArticle4" class="area-result"></p>
+          <ul id="areaArticle4List" class="area-list"></ul>
+          <p id="areaArticle4Note" class="hint"></p>
+        </article>
+        <article class="area-card">
+          <h3>Street crime nearby</h3>
+          <p id="areaCrime" class="area-result"></p>
+          <ul id="areaCrimeList" class="area-list"></ul>
+          <p id="areaCrimeNote" class="hint"></p>
+        </article>
+      </div>
+      <p class="attribution">From public data, checked at the home's map position: flood zones from the Environment Agency (England) and Natural Resources Wales; conservation areas and Article 4 directions from planning.data.gov.uk (England) and DataMapWales; street crime from data.police.uk; postcode positions from postcodes.io (Ordnance Survey, Royal Mail and ONS data). Contains public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener noreferrer">Open Government Licence v3.0</a>. A guide only: check with the council, a surveyor and an insurer before you buy.</p>
+    </section>
+
     <section id="sold" class="sold" hidden aria-labelledby="soldTitle">
       <div class="section-head">
         <h2 id="soldTitle">Sold prices nearby</h2>

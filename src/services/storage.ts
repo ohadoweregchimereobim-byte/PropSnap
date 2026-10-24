@@ -1,5 +1,6 @@
 import type { PropertyListing } from '../adapters/types';
 import type { EpcEnergy } from './epc-energy';
+import { cleanAreaSummary, type AreaSummary } from './area-checks';
 import { chooseCandidate, keepUserChoice } from './address-choice';
 import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, localDate, statusLabel } from './pipeline';
@@ -38,6 +39,10 @@ export function saveListing(listing: PropertyListing): Promise<PropertyListing> 
 
     // Keep the user's pick of home, and every price seen before
     const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
+    // The area checks stay while the home is in the same place
+    const samePlace = previous && (previous.postcode ?? previous.postcodePartial) === (listing.postcode ?? listing.postcodePartial)
+      && previous.latitude === listing.latitude && previous.longitude === listing.longitude;
+    if (samePlace && previous.area && !saved.area) saved.area = previous.area;
     filtered.unshift(saved); // Most recent first
 
     await chrome.storage.local.set({ [LISTINGS_KEY]: filtered });
@@ -85,6 +90,17 @@ export function setEpcEnergy(source: string, listingId: string, energy: EpcEnerg
     existing[index] = { ...current, epcCertificateNumber: energy.certificateNumber, epcEnergy: energy };
     await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
     return existing[index]!;
+  });
+}
+
+/** Keep the short area check results on a saved listing */
+export function setAreaSummary(source: string, listingId: string, area: AreaSummary): Promise<void> {
+  return withLock(LISTINGS_KEY, async () => {
+    const existing = await getListings();
+    const index = existing.findIndex((l) => listingKey(l) === listingKey({ source, listingId }));
+    if (index === -1) return;
+    existing[index] = { ...existing[index]!, area };
+    await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
   });
 }
 
@@ -156,6 +172,12 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     'Listed On',
     'Days On Market',
     'Site Price Changes',
+    'Flood Zone',
+    'Conservation Area',
+    'Article 4 Directions',
+    'HMO Article 4',
+    'Street Crimes',
+    'Area Checked',
     'Listing Type',
     'Bedrooms',
     'Property Type',
@@ -184,6 +206,7 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
   const rows = listings.map((l) => {
     const change = priceChange(l);
     const own = userData[listingKey(l)];
+    const area = cleanAreaSummary(l.area);
     const pipeline = cleanPipeline(own?.pipeline);
     const call = lastCall(cleanActivity(own?.activity));
     return [
@@ -205,6 +228,13 @@ export function listingsToCsv(listings: PropertyListing[], userData: UserDataMap
     daysOnMarket(l, today)?.toString() ?? '',
     // "2026-04-07 down; 2026-08-28 down": the site's own changes, which have no amounts
     portalChanges(l).map((c) => `${c.date} ${c.direction}`).join('; '),
+    // Blank when the area was never checked, or that check failed
+    area?.floodZone === 'FZ3' ? 'Zone 3' : area?.floodZone === 'FZ2' ? 'Zone 2' : area?.floodZone === 'none' ? 'No' : '',
+    area?.conservation == null ? '' : area.conservation || 'No',
+    area?.article4Count?.toString() ?? '',
+    area?.hmoArticle4 == null ? '' : area.hmoArticle4 ? 'yes' : 'no',
+    area?.crimeTotal == null ? '' : `${area.crimeTotal} in ${area.crimeMonth} (about 1 mile)`,
+    area?.checkedAt.slice(0, 10) ?? '',
     l.listingType,
     l.bedrooms?.toString() ?? '',
     l.propertyType ?? '',

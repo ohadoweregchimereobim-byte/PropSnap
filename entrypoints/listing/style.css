@@ -945,6 +945,65 @@ body {
   font-size: 12px;
 }
 
+/* Area checks */
+.area {
+  margin-top: 28px;
+}
+
+.area[hidden],
+.area [hidden] {
+  display: none;
+}
+
+.area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.area-card {
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.area-card h3 {
+  font-size: 13px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.area-result {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.area-bad {
+  color: #b91c1c;
+}
+
+.area-warn {
+  color: #b45309;
+}
+
+.area-good {
+  color: #166534;
+}
+
+.area-none {
+  color: #334155;
+}
+
+.area-list {
+  margin: 6px 0 0 18px;
+  font-size: 13px;
+  color: #334155;
+}
+
 /* Report: hidden on screen, the only thing printed */
 .report {
   display: none;

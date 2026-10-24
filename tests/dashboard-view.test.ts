@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { applyView, DEFAULT_VIEW, matchGroup, safeLink, summarise } from '../src/services/dashboard-view';
+import { applyView, DEFAULT_VIEW, matchGroup, safeLink, summarise, areaFlags } from '../src/services/dashboard-view';
 
 function listing(id: string, extra: Partial<PropertyListing> = {}): PropertyListing {
   return {
@@ -157,6 +157,31 @@ describe("the site's own dates", () => {
     expect(ids(applyView(withDates, { ...DEFAULT_VIEW, price: 'changed' }, context))).toEqual(['1']);
     expect(ids(applyView(withDates, { ...DEFAULT_VIEW, price: 'increased' }, context))).toEqual([]);
     expect(summarise(withDates, context).reduced).toBe(1);
+  });
+});
+
+describe('area checks', () => {
+  const area = (extra: object) => ({ checkedAt: '2026-10-24T12:00:00Z', floodZone: 'none', conservation: '', article4Count: 0, hmoArticle4: false, crimeTotal: 10, crimeMonth: '2026-08', ...extra });
+  const homes = [
+    listing('1', { area: area({ floodZone: 'FZ3' }) as never }),
+    listing('2', { area: area({ hmoArticle4: true, article4Count: 1 }) as never }),
+    listing('3', { area: area({}) as never }),
+    listing('4'),
+    listing('5', { area: area({ floodZone: null, hmoArticle4: null, conservation: 'Cathedral Road' }) as never }),
+  ];
+
+  it('filters on each check, leaving out homes never checked or whose check failed', () => {
+    expect(ids(applyView(homes, { ...DEFAULT_VIEW, area: 'no-hmo-article4' }))).toEqual(['1', '3']);
+    expect(ids(applyView(homes, { ...DEFAULT_VIEW, area: 'no-flood' }))).toEqual(['2', '3']);
+    expect(ids(applyView(homes, { ...DEFAULT_VIEW, area: 'no-conservation' }))).toEqual(['1', '2', '3']);
+    expect(ids(applyView(homes, { ...DEFAULT_VIEW, area: 'flagged' }))).toEqual(['1', '2', '5']);
+    expect(ids(applyView(homes, { ...DEFAULT_VIEW, area: 'all' }))).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('names the warnings', () => {
+    expect(areaFlags(homes[0]!)).toEqual(['Flood zone 3']);
+    expect(areaFlags(homes[4]!)).toEqual(['Conservation area']);
+    expect(areaFlags(homes[3]!)).toEqual([]);
   });
 });
 
