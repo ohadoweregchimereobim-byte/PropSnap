@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { rightmoveAddedDate, rightmovePriceChanges } from './listing-dates';
 import { LISTING_URLS } from './listing-urls';
 import { findEpcBandInText } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
@@ -53,6 +54,7 @@ export class RightmoveAdapter implements SiteAdapter {
 
     const latitude = location.latitude;
     const longitude = location.longitude;
+    const now = new Date();
 
     return {
       listingId: String(propertyData.id ?? this.getListingId()),
@@ -87,7 +89,11 @@ export class RightmoveAdapter implements SiteAdapter {
       // Rightmove has no rating field; agents often write it in key features or the description
       epcRating: findEpcBandInText([...keyFeatures, propertyData.text?.description]),
 
-      capturedAt: new Date().toISOString(),
+      // Rightmove's own dates: first added, and the latest reduction ("Reduced on 12/10/2026")
+      listedOn: rightmoveAddedDate(root?.analyticsInfo?.analyticsProperty?.added),
+      portalPriceChanges: rightmovePriceChanges(propertyData.listingHistory?.listingUpdateReason, now),
+
+      capturedAt: now.toISOString(),
     };
   }
 

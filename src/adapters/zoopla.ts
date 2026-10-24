@@ -1,4 +1,5 @@
 import type { PropertyListing, SiteAdapter } from './types';
+import { zooplaListedOn, zooplaPriceChanges } from './listing-dates';
 import { LISTING_URLS } from './listing-urls';
 import { epcBand } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
@@ -84,6 +85,9 @@ export class ZooplaAdapter implements SiteAdapter {
       deposit: null,
       epcRating: epcBand(analytics.epc_rating),
 
+      listedOn: zooplaListedOn(analytics.published_on),
+      portalPriceChanges: zooplaPriceChanges(analytics.price_changes),
+
       capturedAt: new Date().toISOString(),
     };
   }
@@ -152,6 +156,9 @@ export class ZooplaAdapter implements SiteAdapter {
         // Zoopla's estimate from neighbouring homes, not this home's own size.
         floor_area: /["']floorArea["']\s*:\s*(\{[^{}]*\})/,
         size_sq_feet: /["']sizeSqFeet["']\s*:\s*["']?(\d[\d,.]*)/,
+        // Zoopla's own dates: first published, and each price change (date and drop or rise, no amount)
+        published_on: /["']publishedOn["']\s*:\s*["'](\d{4}-\d{2}-\d{2}[^"']*)["']/,
+        price_changes: /["']priceChanges["']\s*:\s*(\[[^\]]*\])/,
       };
 
       for (const [key, regex] of Object.entries(patterns)) {

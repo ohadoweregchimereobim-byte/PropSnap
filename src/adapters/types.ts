@@ -53,6 +53,17 @@ export interface PropertyListing {
 
   /** Every price PropSnap has seen for this listing, oldest first (one point per change) */
   priceHistory?: PricePoint[] | null;
+
+  /** YYYY-MM-DD the site says the listing was first added (Rightmove, Zoopla); null when it does not say */
+  listedOn?: string | null;
+  /** Price changes the site itself shows, with dates but no amounts, oldest first */
+  portalPriceChanges?: PortalPriceChange[] | null;
+}
+
+/** A price change the listing site shows: the date and which way, without the amount */
+export interface PortalPriceChange {
+  date: string; // YYYY-MM-DD
+  direction: 'down' | 'up';
 }
 
 /** A price seen at one capture */

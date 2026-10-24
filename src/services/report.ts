@@ -2,7 +2,7 @@ import type { PropertyListing } from '../adapters/types';
 import { formatMoney, SITE_NAMES } from './format';
 import { customCostTotals, sourcingFee, type BrrResult, type BuyToLetResult, type DealInputs, type FlipResult, type HmoResult } from './calculators';
 import { headingColour, isBranded, type Branding } from './branding';
-import { describeChange, priceChange } from './price-history';
+import { daysOnMarket, describeChange, describePortalChanges, priceChange } from './price-history';
 import { statusLabel, type Pipeline } from './pipeline';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, TYPE_NAMES, type SoldPriceView } from './sold-prices';
 import { bandForScore, describeEnergy, lowWithPotential } from './epc-energy';
@@ -86,7 +86,14 @@ function compact(rows: Array<[string, string | null | undefined | false]>): Arra
   return rows.filter((r): r is [string, string] => typeof r[1] === 'string' && r[1].trim() !== '');
 }
 
-function propertySection(l: PropertyListing): ReportSection {
+/** "Since 6 Mar 2026 (232 days, Zoopla's date)" */
+function onMarket(l: PropertyListing, today: Date): string | null {
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const days = daysOnMarket(l, ymd);
+  return l.listedOn && days != null ? `Since ${date(`${l.listedOn}T12:00:00Z`)} (${days} day${days === 1 ? '' : 's'}, ${SITE_NAMES[l.source]}'s date)` : null;
+}
+
+function propertySection(l: PropertyListing, generatedAt: Date): ReportSection {
   const address = l.fullAddress
     ? `${l.fullAddress}${l.addressConfidence === 'best_guess' ? ' (best guess from the EPC register)' : ''}`
     : null;
@@ -114,6 +121,7 @@ function propertySection(l: PropertyListing): ReportSection {
       ['Agent', [l.agentName, l.agentBranch].filter(Boolean).join(', ') || null],
       ['Agent phone', l.agentPhone],
       ['Listing', `${SITE_NAMES[l.source] ?? l.source}: ${l.url}`],
+      ['On the market', onMarket(l, generatedAt)],
       ['Captured', date(l.capturedAt)],
     ]),
   };
@@ -121,16 +129,20 @@ function propertySection(l: PropertyListing): ReportSection {
 
 function priceSection(l: PropertyListing): ReportSection | null {
   const change = priceChange(l);
-  if (!change) return null;
+  const portal = describePortalChanges(l);
+  if (!change && !portal) return null;
   const points = l.priceHistory ?? [];
   return {
     heading: 'Price history',
-    notes: [`${describeChange(change)} since ${date(change.first.seenAt)}, from ${formatMoney(change.first.price!)}.`],
-    table: {
+    notes: [
+      change ? `${describeChange(change)} since ${date(change.first.seenAt)}, from ${formatMoney(change.first.price!)}.` : null,
+      portal ? `${portal} (the site does not show the amounts).` : null,
+    ].filter((n): n is string => n !== null),
+    table: change ? {
       head: ['Seen', 'Price', ''],
       numeric: [1],
       rows: points.map((p) => [date(p.seenAt), p.price ? formatMoney(p.price) : 'No price', p.qualifier ?? '']),
-    },
+    } : undefined,
   };
 }
 
@@ -321,7 +333,7 @@ function flipSection(sold: NonNullable<ReportInput['sold']>): ReportSection | nu
 function notesSection(input: ReportInput): ReportSection | null {
   const p = input.pipeline;
   const labels = input.labels ?? [];
-  const items = timeline(input.activity ?? [], input.listing.priceHistory);
+  const items = timeline(input.activity ?? [], input.listing.priceHistory, { on: input.listing.listedOn, site: SITE_NAMES[input.listing.source] });
   // The capture and price lines are in the report already; only the user's own entries count
   const hasActivity = items.some((i) => i.id);
   if (!p && labels.length === 0 && !hasActivity) return null;
@@ -349,7 +361,7 @@ function notesSection(input: ReportInput): ReportSection | null {
 
 export function buildReport(input: ReportInput): Report {
   const l = input.listing;
-  const sections: ReportSection[] = [propertySection(l)];
+  const sections: ReportSection[] = [propertySection(l, input.generatedAt)];
 
   const energy = energySection(l);
   if (energy) sections.push(energy);

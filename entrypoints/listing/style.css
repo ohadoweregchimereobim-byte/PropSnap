@@ -97,6 +97,16 @@ body {
   font-size: 13px;
 }
 
+.header [hidden] {
+  display: none;
+}
+
+.on-market {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #475569;
+}
+
 .price-change {
   font-weight: 700;
 }
@@ -493,7 +503,8 @@ body {
 }
 
 .timeline .t-price .t-title,
-.timeline .t-captured .t-title {
+.timeline .t-captured .t-title,
+.timeline .t-listed .t-title {
   color: #64748b;
   font-weight: 500;
 }

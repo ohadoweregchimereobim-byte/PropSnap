@@ -59,7 +59,7 @@ import {
 } from '../../src/services/calculators';
 import { BRANDING_KEY, cleanBranding, getBranding, logoProblem, saveBranding, type Branding } from '../../src/services/branding';
 import { fetchSoldPricesCached, type SoldPrice } from '../../src/services/land-registry';
-import { describeChange, priceChange } from '../../src/services/price-history';
+import { daysOnMarket, describeChange, describePortalChanges, portalChanges, priceChange } from '../../src/services/price-history';
 import { buildReport, defaultStrategies, type Report, type Strategies } from '../../src/services/report';
 import { FEW_SALES, FLIP_MIN_RISE_PCT, FLIP_MONTHS, median, saleAddress, soldPriceArea, soldPriceView, typeChoices, TYPE_NAMES, type Flip } from '../../src/services/sold-prices';
 import { bandForScore, energyGap, lowWithPotential, type Band } from '../../src/services/epc-energy';
@@ -413,12 +413,15 @@ function showCrm() {
   const call = lastCall(activity);
   $('lastCallLine').textContent = call ? `Last call ${whenText(call.at, now)}: ${outcomeLabel(call.outcome)}` : 'No calls logged yet.';
 
-  $('timeline').replaceChildren(...timeline(activity, listing.priceHistory).map((item) => {
+  $('timeline').replaceChildren(...timeline(activity, listing.priceHistory, { on: listing.listedOn, site: SITE_NAMES[listing.source] }).map((item) => {
     const li = document.createElement('li');
     li.className = `t-${item.kind}`;
     const time = document.createElement('time');
     time.dateTime = item.at;
-    time.textContent = new Date(item.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // The site gives a day, not a time
+    time.textContent = item.kind === 'listed'
+      ? new Date(item.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+      : new Date(item.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const body = document.createElement('div');
     const title = document.createElement('div');
     title.className = 't-title';
@@ -562,10 +565,24 @@ async function loadEnergy() {
   }
 }
 
-/** How the price moved between captures; hidden until it has */
+/**
+ * How long the site says it has been on the market, and how the price moved:
+ * between captures (with amounts) and as the site shows it (dates only)
+ */
 function showPriceHistory(l: PropertyListing) {
+  const days = daysOnMarket(l, localDate(new Date()));
+  $('onMarket').hidden = days == null;
+  $('onMarket').textContent = days == null ? '' : `On the market since ${shortDate(`${l.listedOn}T12:00:00Z`)}: ${days} day${days === 1 ? '' : 's'} (${SITE_NAMES[l.source]}'s date)`;
+
+  const portal = describePortalChanges(l);
+  $('portalChangeLine').hidden = !portal;
+  $('portalChangeLine').textContent = portal ? `${portal}. ${SITE_NAMES[l.source]} does not show the amounts.` : '';
+  $('portalChangeLine').className = `price-change price-${portalChanges(l).at(-1)?.direction === 'up' ? 'increased' : 'reduced'}`;
+
   const change = priceChange(l);
-  $('priceHistory').hidden = !change;
+  $('priceHistory').hidden = !change && !portal;
+  $('priceChangeLine').hidden = !change;
+  $('capturedHistory').hidden = !change;
   if (!change) return;
 
   const line = $('priceChangeLine');

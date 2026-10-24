@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PropertyListing } from '../src/adapters/types';
-import { describeChange, latestMove, priceChange, withPriceHistory } from '../src/services/price-history';
+import { daysOnMarket, describeChange, describeDays, describePortalChanges, latestMove, latestPortalChange, priceChange, priceMoved, wasIncreased, wasReduced, withPriceHistory } from '../src/services/price-history';
 
 function capture(price: number | null, capturedAt: string, extra: Partial<PropertyListing> = {}): PropertyListing {
   return {
@@ -109,5 +109,44 @@ describe('latestMove', () => {
     );
     expect(latestMove(saved)).toEqual({ from: 300_000, to: 290_000, seenAt: '2026-10-12T09:00:00Z' });
     expect(latestMove(captures([300_000, '2026-10-01T09:00:00Z']))).toBeNull();
+  });
+});
+
+describe("the site's own dates", () => {
+  it('adds up the site changes across captures and keeps the listed date', () => {
+    const first = capture(300_000, '2026-10-01T09:00:00Z', { listedOn: '2026-09-18', portalPriceChanges: [{ date: '2026-09-25', direction: 'down' }] });
+    // Rightmove shows only its latest reduction, and this capture lost the added date
+    const next = capture(290_000, '2026-10-14T09:00:00Z', { listedOn: null, portalPriceChanges: [{ date: '2026-10-12', direction: 'down' }] });
+    const saved = withPriceHistory(withPriceHistory(undefined, first), next);
+    expect(saved.listedOn).toBe('2026-09-18');
+    expect(saved.portalPriceChanges).toEqual([{ date: '2026-09-25', direction: 'down' }, { date: '2026-10-12', direction: 'down' }]);
+    // A newer listed date (relisted) wins
+    expect(withPriceHistory(saved, capture(290_000, '2026-10-20T09:00:00Z', { listedOn: '2026-10-19' })).listedOn).toBe('2026-10-19');
+  });
+
+  it('counts days on the market from the site date', () => {
+    expect(daysOnMarket({ listedOn: '2026-03-06' }, '2026-10-24')).toBe(232);
+    expect(daysOnMarket({ listedOn: '2026-10-24' }, '2026-10-24')).toBe(0);
+    expect(daysOnMarket({ listedOn: null }, '2026-10-24')).toBeNull();
+    expect(daysOnMarket({ listedOn: '2026-11-01' }, '2026-10-24')).toBeNull();
+    expect(describeDays(232)).toBe('232 days on the market');
+    expect(describeDays(1)).toBe('1 day on the market');
+    expect(describeDays(0)).toBe('listed today');
+  });
+
+  it('counts a drop the site shows as reduced, even on the first capture', () => {
+    const once = capture(325_000, '2026-10-24T09:00:00Z', { source: 'zoopla', portalPriceChanges: [{ date: '2026-04-07', direction: 'down' }, { date: '2026-08-28', direction: 'down' }] });
+    const saved = withPriceHistory(undefined, once);
+    expect(priceChange(saved)).toBeNull();
+    expect(wasReduced(saved)).toBe(true);
+    expect(wasIncreased(saved)).toBe(false);
+    expect(priceMoved(saved)).toBe(true);
+    expect(describePortalChanges(saved)).toBe('Zoopla shows 2 price drops: 7 Apr 2026, 28 Aug 2026');
+    expect(latestPortalChange(saved)).toBe('Reduced 28 Aug 2026');
+
+    const plain = withPriceHistory(undefined, capture(325_000, '2026-10-24T09:00:00Z'));
+    expect(wasReduced(plain)).toBe(false);
+    expect(priceMoved(plain)).toBe(false);
+    expect(describePortalChanges(plain)).toBeNull();
   });
 });

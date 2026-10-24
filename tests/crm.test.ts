@@ -99,6 +99,14 @@ describe('activity', () => {
   });
 });
 
+describe('the site listed date in the timeline', () => {
+  it('adds "Listed on" at the date the site gives', () => {
+    const items = timeline([], null, { on: '2026-03-06', site: 'Zoopla' });
+    expect(items).toEqual([{ at: '2026-03-06T00:00:00.000Z', kind: 'listed', title: 'Listed on Zoopla', text: '' }]);
+    expect(timeline([], null, { on: null, site: 'Zoopla' })).toEqual([]);
+  });
+});
+
 describe('calls that move the stage', () => {
   it('maps the stage outcomes, and leaves the others alone', () => {
     expect(stageForOutcome('viewing_booked')).toBe('viewing');

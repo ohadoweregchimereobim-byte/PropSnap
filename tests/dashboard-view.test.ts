@@ -138,6 +138,28 @@ describe('hidden homes and labels', () => {
   });
 });
 
+describe("the site's own dates", () => {
+  const withDates = [
+    listing('1', { listedOn: '2026-03-06', portalPriceChanges: [{ date: '2026-08-28', direction: 'down' }] }),
+    listing('2', { listedOn: '2026-10-01' }),
+    listing('3'),
+  ];
+  const context = { today: '2026-10-24' };
+
+  it('filters by days on the market, leaving out homes with no site date', () => {
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, minDays: 0 }, context))).toEqual(['1', '2', '3']);
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, minDays: 20 }, context))).toEqual(['1', '2']);
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, minDays: 90 }, context))).toEqual(['1']);
+  });
+
+  it('counts a drop the site shows in the reduced filter and count', () => {
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, price: 'reduced' }, context))).toEqual(['1']);
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, price: 'changed' }, context))).toEqual(['1']);
+    expect(ids(applyView(withDates, { ...DEFAULT_VIEW, price: 'increased' }, context))).toEqual([]);
+    expect(summarise(withDates, context).reduced).toBe(1);
+  });
+});
+
 describe('summarise and matchGroup', () => {
   it('counts each match group', () => {
     expect(summarise(saved)).toEqual({ total: 3, exact: 1, user_choice: 0, best_guess: 1, none: 1, reduced: 0, active: 0, due: 0, hidden: 0 });

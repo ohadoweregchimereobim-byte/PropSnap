@@ -11,7 +11,7 @@ import { formatMoney, SITE_NAMES } from '../../src/services/format';
 import { describeEnergy } from '../../src/services/epc-energy';
 import { mapsLink } from '../../src/services/address-choice';
 import { downloadCsv } from '../../src/services/csv-download';
-import { describeChange, priceChange } from '../../src/services/price-history';
+import { daysOnMarket, describeChange, describeDays, describePortalChanges, latestPortalChange, priceChange } from '../../src/services/price-history';
 import { followUpState, localDate, STATUSES, type PipelineStatus } from '../../src/services/pipeline';
 import { getAgentNotes, getAllUserData, listingKey, setHidden, updatePipeline, USER_DATA_KEY, type UserDataMap } from '../../src/services/user-data';
 import { AGENTS_KEY, allLabels, cleanActivity, cleanLabels, groupByAgent, lastCall, outcomeLabel, whenText, type AgentNotes } from '../../src/services/crm';
@@ -39,6 +39,7 @@ const priceSelect = document.getElementById('priceFilter') as HTMLSelectElement;
 const statusSelect = document.getElementById('statusFilter') as HTMLSelectElement;
 const labelSelect = document.getElementById('labelFilter') as HTMLSelectElement;
 const hiddenSelect = document.getElementById('hiddenFilter') as HTMLSelectElement;
+const daysSelect = document.getElementById('daysFilter') as HTMLSelectElement;
 const groupBox = document.getElementById('groupByAgent') as HTMLInputElement;
 const sortButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('th button[data-sort]'));
 
@@ -86,6 +87,7 @@ async function init() {
   statusSelect.addEventListener('change', () => { view.status = statusSelect.value as ViewOptions['status']; render(); });
   labelSelect.addEventListener('change', () => { view.label = labelSelect.value; render(); });
   hiddenSelect.addEventListener('change', () => { view.hidden = hiddenSelect.value as ViewOptions['hidden']; render(); });
+  daysSelect.addEventListener('change', () => { view.minDays = Number(daysSelect.value) || 0; render(); });
   groupBox.addEventListener('change', render);
 
   for (const button of sortButtons) {
@@ -187,7 +189,7 @@ function renderRow(l: PropertyListing): HTMLTableRowElement {
 
   tr.append(
     pickCell(l),
-    cell(formatDate(l.capturedAt), 'nowrap'),
+    capturedCell(l),
     cell(SITE_NAMES[l.source] ?? l.source),
     addressCell(l),
     cell(l.postcode || l.postcodePartial || '—', 'nowrap'),
@@ -245,16 +247,36 @@ function epcCell(l: PropertyListing): HTMLTableCellElement {
   return td;
 }
 
-/** The price, with how it moved since the first capture */
+/** When it was captured, and how long the site says it has been on the market */
+function capturedCell(l: PropertyListing): HTMLTableCellElement {
+  const td = cell(formatDate(l.capturedAt), 'nowrap');
+  const days = daysOnMarket(l, localDate(new Date()));
+  if (days != null) {
+    const line = document.createElement('div');
+    line.className = 'on-market';
+    line.textContent = describeDays(days);
+    line.title = `${SITE_NAMES[l.source]} first listed it on ${new Date(`${l.listedOn}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    td.append(line);
+  }
+  return td;
+}
+
+/** The price, with how it moved since the first capture, else the latest change the site shows */
 function priceCell(l: PropertyListing): HTMLTableCellElement {
   const td = cell(formatPrice(l), 'num nowrap');
   const change = priceChange(l);
+  const tag = document.createElement('div');
   if (change) {
-    const tag = document.createElement('div');
     tag.className = `price-move price-${change.direction}`;
     tag.textContent = describeChange(change);
     tag.title = `First seen at ${formatMoney(change.first.price!)} on ${formatDate(change.first.seenAt)}; `
       + `${change.moves} change${change.moves === 1 ? '' : 's'}, the last seen on ${formatDate(change.lastMoveAt!)}`;
+    td.append(tag);
+  } else if (latestPortalChange(l)) {
+    // The site's own change: a date, no amount
+    tag.className = `price-move price-${latestPortalChange(l)!.startsWith('Reduced') ? 'reduced' : 'increased'}`;
+    tag.textContent = latestPortalChange(l)!;
+    tag.title = `${describePortalChanges(l)}. The site does not show the amounts.`;
     td.append(tag);
   }
   return td;

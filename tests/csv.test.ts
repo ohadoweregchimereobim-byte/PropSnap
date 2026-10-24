@@ -105,6 +105,16 @@ describe('listingsToCsv', () => {
     expect(row(listing())['Last Call']).toBe('');
   });
 
+  it("includes the site's listed date, days on the market and its price changes", () => {
+    const csv = listingsToCsv([listing({ listedOn: '2026-03-06', portalPriceChanges: [{ date: '2026-04-07', direction: 'down' }, { date: '2026-08-28', direction: 'down' }] })], {}, '2026-10-24');
+    const [headers, cells] = csv.split('\n').map((line) => line.split(','));
+    const cell = (name: string) => cells![headers!.indexOf(name)];
+    expect(cell('Listed On')).toBe('2026-03-06');
+    expect(cell('Days On Market')).toBe('232');
+    expect(cell('Site Price Changes')).toBe('2026-04-07 down; 2026-08-28 down');
+    expect(row(listing())['Days On Market']).toBe('');
+  });
+
   it("includes the certificate's rating now and potential", () => {
     const cells = row(listing({ epcEnergy: { certificateNumber: 'c', currentBand: 'E', potentialBand: 'C', currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] } }));
     expect(cells['EPC Certificate Now']).toBe('E 50');
