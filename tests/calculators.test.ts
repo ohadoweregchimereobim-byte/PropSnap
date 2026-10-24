@@ -71,6 +71,11 @@ describe('monthlyMortgage', () => {
     expect(monthlyMortgage(200_000, 5, 25, 'interest_only')).toBeCloseTo(833.33, 2);
     expect(monthlyMortgage(0, 5, 25, 'repayment')).toBe(0);
   });
+
+  it('uses the usual 25 years while the term box is empty, never £∞', () => {
+    expect(monthlyMortgage(200_000, 5, 0, 'repayment')).toBeCloseTo(1_169.18, 2);
+    expect(monthlyMortgage(200_000, 0, 0, 'repayment')).toBeCloseTo(666.67, 2);
+  });
 });
 
 const deal = (extra: Partial<DealInputs>): DealInputs => ({

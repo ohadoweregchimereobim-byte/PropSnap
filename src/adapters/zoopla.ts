@@ -1,6 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { zooplaListedOn, zooplaPriceChanges } from './listing-dates';
-import { LISTING_URLS } from './listing-urls';
+import { checkedListingId, LISTING_URLS } from './listing-urls';
 import { epcBand } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
@@ -28,7 +28,7 @@ export class ZooplaAdapter implements SiteAdapter {
     const jsonLd = this.extractJsonLd();
     const analytics = this.extractAnalytics();
 
-    const listingId = analytics.listing_id ?? this.getListingIdFromUrl();
+    const listingId = checkedListingId(this.getListingIdFromUrl(), analytics.listing_id);
     const url = window.location.href;
     const isRent = url.includes('/to-rent/');
 

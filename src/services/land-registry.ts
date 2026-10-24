@@ -176,30 +176,43 @@ async function runQuery(query: string, signal: AbortSignal): Promise<SoldPrice[]
   return parseSoldPrices(await response.json());
 }
 
+/** The two searches: every sale in the full postcode, and on the street in its district */
+export type SoldSearch = 'postcode' | 'street';
+
+export interface SoldAnswer {
+  sales: SoldPrice[];
+  /** Searches that did not answer: the sales are only part of the picture */
+  failed: SoldSearch[];
+}
+
 /**
  * Sales in the full postcode and on the same street in the postcode district.
- * Either part can be missing; with neither there is nothing to ask.
+ * Either part can be missing; with neither there is nothing to ask. When one
+ * search fails, the other's sales come back with that search in `failed`.
  */
 export async function fetchSoldPrices(
   where: { postcode: string | null; street: string | null; outcode: string | null },
   timeoutMs = 25_000,
-): Promise<SoldPrice[]> {
-  const queries = [
-    where.postcode ? postcodeQuery(where.postcode) : null,
-    where.street && where.outcode ? streetQuery(where.street, where.outcode) : null,
-  ].filter((q): q is string => q !== null);
-  if (queries.length === 0) return [];
+): Promise<SoldAnswer> {
+  const queries = ([
+    ['postcode', where.postcode ? postcodeQuery(where.postcode) : null],
+    ['street', where.street && where.outcode ? streetQuery(where.street, where.outcode) : null],
+  ] as const).filter((q): q is readonly [SoldSearch, string] => q[1] !== null);
+  if (queries.length === 0) return { sales: [], failed: [] };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const results = await Promise.allSettled(queries.map((q) => runQuery(q, controller.signal)));
+    const results = await Promise.allSettled(queries.map(([, q]) => runQuery(q, controller.signal)));
     const ok = results.filter((r): r is PromiseFulfilledResult<SoldPrice[]> => r.status === 'fulfilled');
     if (ok.length === 0) {
       const reason = (results[0] as PromiseRejectedResult).reason;
       throw controller.signal.aborted ? new Error('Land Registry did not answer in time') : reason;
     }
-    return mergeSales(...ok.map((r) => r.value));
+    return {
+      sales: mergeSales(...ok.map((r) => r.value)),
+      failed: queries.filter((_, i) => results[i]!.status === 'rejected').map(([search]) => search),
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -213,20 +226,21 @@ type SoldArea = { postcode: string | null; street: string | null; outcode: strin
 /**
  * fetchSoldPrices, with the answer kept for a day so opening the same listing
  * again is instant. `fresh` asks Land Registry again (the Refresh button).
- * `at` says when the sales were fetched.
+ * `at` says when the sales were fetched. Only a whole answer is kept, so a
+ * search that failed is asked again next time.
  */
 export async function fetchSoldPricesCached(
   where: SoldArea,
   { fresh = false }: { fresh?: boolean } = {},
-): Promise<{ sales: SoldPrice[]; at: number }> {
+): Promise<SoldAnswer & { at: number }> {
   // The same area however it is spelled
   const tidy = (v: string | null) => (v ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
   const key = `sold:${formatPostcode(where.postcode) ?? ''}|${tidy(where.street)}|${tidy(where.outcode)}`;
   if (!fresh) {
     const kept = await readCache<SoldPrice[]>(key);
-    if (kept) return { sales: kept.value, at: kept.at };
+    if (kept) return { sales: kept.value, failed: [], at: kept.at };
   }
-  const sales = await fetchSoldPrices(where);
-  await writeCache(key, sales, SOLD_CACHE_MS);
-  return { sales, at: Date.now() };
+  const answer = await fetchSoldPrices(where);
+  if (answer.failed.length === 0) await writeCache(key, answer.sales, SOLD_CACHE_MS);
+  return { ...answer, at: Date.now() };
 }

@@ -1,6 +1,7 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { LISTING_URLS } from './listing-urls';
 import { findFloorAreaInText } from './floor-area-text';
+import { epcBand } from './epc-band';
 
 /**
  * OpenRent adapter
@@ -78,8 +79,9 @@ export class OpenRentAdapter implements SiteAdapter {
       tenure: null,
       furnished: tableData['Furnishing'] ?? tableData['Furnished'] ?? null,
       deposit: this.parsePrice(tableData['Deposit']),
+      // The band only ("C (72)" → "C"), as on the other sites
       epcRating:
-        tableData['EPC Rating'] ?? tableData['EPC'] ?? ('EPC Not Required' in tableData ? 'Not required' : null),
+        epcBand(tableData['EPC Rating'] ?? tableData['EPC']) ?? ('EPC Not Required' in tableData ? 'Not required' : null),
 
       capturedAt: new Date().toISOString(),
     };

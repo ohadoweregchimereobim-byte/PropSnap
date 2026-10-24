@@ -1,7 +1,7 @@
 import type { PropertyListing } from '../adapters/types';
 import type { EpcEnergy } from './epc-energy';
 import { cleanAreaSummary, type AreaSummary } from './area-checks';
-import { chooseCandidate, keepUserChoice } from './address-choice';
+import { chooseCandidate, keepKnownAddress, keepUserChoice } from './address-choice';
 import { clearUserData, listingKey, removeUserData, type UserDataMap } from './user-data';
 import { cleanPipeline, localDate, statusLabel } from './pipeline';
 import { cleanActivity, cleanLabels, lastCall, outcomeLabel } from './crm';
@@ -26,9 +26,10 @@ const DEFAULT_SETTINGS: PropSnapSettings = {
 /**
  * Save a captured listing to Chrome extension storage.
  * Returns the listing as saved (a home the user picked earlier, and the
- * prices seen before, are kept).
+ * prices seen before, are kept). With `keepAddress` (the capture got no
+ * answer from the EPC register), the home found before is kept too.
  */
-export function saveListing(listing: PropertyListing): Promise<PropertyListing> {
+export function saveListing(listing: PropertyListing, { keepAddress = false }: { keepAddress?: boolean } = {}): Promise<PropertyListing> {
   return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
 
@@ -37,8 +38,9 @@ export function saveListing(listing: PropertyListing): Promise<PropertyListing> 
     const previous = existing.find((l) => listingKey(l) === key);
     const filtered = existing.filter((l) => listingKey(l) !== key);
 
-    // Keep the user's pick of home, and every price seen before
-    const saved = withPriceHistory(previous, keepUserChoice(previous, listing));
+    // Keep the user's pick of home (or the home found before), and every price seen before
+    const next = keepAddress ? keepKnownAddress(previous, listing) : listing;
+    const saved = withPriceHistory(previous, keepUserChoice(previous, next));
     // The area checks stay while the home is in the same place
     const samePlace = previous && (previous.postcode ?? previous.postcodePartial) === (listing.postcode ?? listing.postcodePartial)
       && previous.latitude === listing.latitude && previous.longitude === listing.longitude;
@@ -93,13 +95,21 @@ export function setEpcEnergy(source: string, listingId: string, energy: EpcEnerg
   });
 }
 
-/** Keep the short area check results on a saved listing */
-export function setAreaSummary(source: string, listingId: string, area: AreaSummary): Promise<void> {
+/**
+ * Keep the short area check results on a saved listing. `area` can be worked
+ * out from the summary saved now, read under the same lock.
+ */
+export function setAreaSummary(
+  source: string,
+  listingId: string,
+  area: AreaSummary | ((saved: AreaSummary | null) => AreaSummary),
+): Promise<void> {
   return withLock(LISTINGS_KEY, async () => {
     const existing = await getListings();
     const index = existing.findIndex((l) => listingKey(l) === listingKey({ source, listingId }));
     if (index === -1) return;
-    existing[index] = { ...existing[index]!, area };
+    const current = existing[index]!;
+    existing[index] = { ...current, area: typeof area === 'function' ? area(cleanAreaSummary(current.area)) : area };
     await chrome.storage.local.set({ [LISTINGS_KEY]: existing });
   });
 }

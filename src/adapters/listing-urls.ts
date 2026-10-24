@@ -25,3 +25,17 @@ export function listingSiteForUrl(url: string): PropertyListing['source'] | null
   }
   return null;
 }
+
+/**
+ * The listing number from the web address, checked against the one in the
+ * page's data. A site that moves to another listing without a full page load
+ * can leave the last listing's data in the page; saving it under this address
+ * would mix two homes, so the user is asked to reload instead.
+ */
+export function checkedListingId(fromUrl: string, fromPage: unknown): string {
+  const page = fromPage == null ? '' : String(fromPage).trim();
+  if (fromUrl && page && fromUrl !== page) {
+    throw new Error('PropSnap: This page still holds the details of another listing. Reload the page, then click Capture again.');
+  }
+  return fromUrl || page;
+}

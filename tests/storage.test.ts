@@ -89,6 +89,23 @@ describe('saving listings', () => {
     expect(saved!.addressConfidence).toBe('user_choice');
   });
 
+  it('keeps the home found before when a new capture gets no answer from the EPC register', async () => {
+    const energy = { certificateNumber: 'c1', currentBand: 'E' as const, potentialBand: 'C' as const, currentScore: 50, potentialScore: 72, registrationDate: null, improvements: [] };
+    await saveListing(listing('1', { fullAddress: candidates[0]!.fullAddress, addressConfidence: 'exact', epcCertificateNumber: 'c1', epcEnergy: energy }));
+    // EPC lookup off, no token, or the register failed: the address stays, the new price comes in
+    await saveListing(listing('1', { price: 290_000, capturedAt: '2026-10-12T10:00:00Z' }), { keepAddress: true });
+
+    const [saved] = await getListings();
+    expect(saved).toMatchObject({ fullAddress: '1 Tweedsmuir Road, Cardiff', addressConfidence: 'exact', epcCertificateNumber: 'c1', price: 290_000 });
+    expect(saved!.epcEnergy?.potentialBand).toBe('C');
+  });
+
+  it('lets a capture the register answered replace the home found before', async () => {
+    await saveListing(listing('1', { fullAddress: candidates[0]!.fullAddress, addressConfidence: 'exact' }));
+    await saveListing(listing('1', { capturedAt: '2026-10-12T10:00:00Z' }));
+    expect((await getListings())[0]!.fullAddress).toBeNull();
+  });
+
   it('loses neither of two captures saved at the same moment', async () => {
     await Promise.all([saveListing(listing('1')), saveListing(listing('2')), saveListing(listing('3'))]);
     expect((await getListings()).map((l) => l.listingId).sort()).toEqual(['1', '2', '3']);

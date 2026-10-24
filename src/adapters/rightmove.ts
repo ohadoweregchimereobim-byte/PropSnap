@@ -1,6 +1,6 @@
 import type { PropertyListing, SiteAdapter } from './types';
 import { rightmoveAddedDate, rightmovePriceChanges } from './listing-dates';
-import { LISTING_URLS } from './listing-urls';
+import { checkedListingId, LISTING_URLS } from './listing-urls';
 import { findEpcBandInText } from './epc-band';
 import { findFloorAreaInText } from './floor-area-text';
 import { findUnitNumberInText } from './unit-number';
@@ -57,7 +57,7 @@ export class RightmoveAdapter implements SiteAdapter {
     const now = new Date();
 
     return {
-      listingId: String(propertyData.id ?? this.getListingId()),
+      listingId: checkedListingId(this.getListingId(), propertyData.id),
       source: 'rightmove',
       url: window.location.href,
 

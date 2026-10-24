@@ -109,6 +109,17 @@ describe('Rightmove', () => {
   });
 });
 
+describe('a page left over from another listing', () => {
+  it('is refused instead of saving one home under another\'s number', async () => {
+    const zooplaPage = `<html><head><script>{"listing_id":"67000001","display_address":"Old Road, Cardiff CF11"}</script></head><body></body></html>`;
+    await expect(capture('https://www.zoopla.co.uk/for-sale/details/67012345/', zooplaPage)).rejects.toThrow(/Reload the page/);
+
+    const model = { data: JSON.stringify(pack({ propertyData: { id: '160000001', address: { displayAddress: 'Old Road' } } })) };
+    const rightmovePage = `<html><body><script>window.__PAGE_MODEL = ${JSON.stringify(model)};</script></body></html>`;
+    await expect(capture('https://www.rightmove.co.uk/properties/160123456', rightmovePage)).rejects.toThrow(/Reload the page/);
+  });
+});
+
 describe('Zoopla', () => {
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -188,7 +199,7 @@ describe('OpenRent', () => {
       <tr><td>Rent PCM</td><td>£2,800.00</td></tr>
       <tr><td>Deposit</td><td>£3,230.77</td></tr>
       <tr><td>Furnishing</td><td>Furnished</td></tr>
-      <tr><td>EPC Rating</td><td>C</td></tr>
+      <tr><td>EPC Rating</td><td>C (72)</td></tr>
     </table>
     <div class="landlord-profile"><p>Jane D.</p></div>
     <div id="descriptionText"><p>A bright one bedroom flat.</p><p>Total floor area 48 sq m.</p></div>

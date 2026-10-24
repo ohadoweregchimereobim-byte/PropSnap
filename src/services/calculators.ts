@@ -151,14 +151,18 @@ export function taxRegionFromPostcode(postcode: string | null | undefined): { re
   return { region: 'england', sure: true };
 }
 
+/** The usual mortgage term, used while the term box is empty */
+export const DEFAULT_TERM_YEARS = 25;
+
 /** Monthly mortgage payment */
 export function monthlyMortgage(loan: number, annualRatePct: number, years: number, type: MortgageType): number {
   if (!(loan > 0)) return 0;
   const r = annualRatePct / 100 / 12;
+  // A repayment mortgage over no time at all has no payment to show
+  const n = (years > 0 ? years : DEFAULT_TERM_YEARS) * 12;
   if (type === 'interest_only' || r === 0) {
-    return type === 'interest_only' ? loan * r : loan / (years * 12);
+    return type === 'interest_only' ? loan * r : loan / n;
   }
-  const n = years * 12;
   return (loan * r) / (1 - Math.pow(1 + r, -n));
 }
 
@@ -214,7 +218,7 @@ export const DEFAULT_DEAL_INPUTS: Omit<DealInputs, 'price' | 'region' | 'rentMon
   buyingCosts: 1_500,
   depositPct: 25,
   ratePct: 5,
-  termYears: 25,
+  termYears: DEFAULT_TERM_YEARS,
   mortgageType: 'interest_only',
   managementPct: 10,
   maintenancePct: 8,
